@@ -59,6 +59,8 @@ telemetry, remote code, or runtime dependencies. Independent of OpenAI.
   remain browser-controlled.
 - ChatGPT's existing down-arrow button jumps to the current bottom **once**.
   New output after that does not automatically follow.
+- ChatGPT's right-hand prompt-navigation rail and expanded prompt menu allow
+  deliberate jumps to earlier or later prompts and their answers.
 - The toolbar popup pauses/resumes protection. The setting is stored locally.
 - Only `https://chatgpt.com/` is in scope. Nested editors, code panels, and other
   independently scrolling panels keep their normal scrolling methods.
@@ -95,7 +97,7 @@ release Firefox.
 For personal testing, **Firefox Developer Edition** supports persistent unsigned
 installation. Use its separate profile, set `xpinstall.signatures.required` to
 `false` in `about:config`, then open `about:addons` and choose the gear menu →
-**Install Add-on From File…** → `dist/still-0.1.0-unsigned.xpi` (build it below).
+**Install Add-on From File…** → `dist/still-0.1.1-unsigned.xpi` (build it below).
 Confirm the requested
 ChatGPT access. This installation survives restarts; no Mozilla signing submission
 or public listing is involved. The preference permits other unsigned extensions
@@ -130,6 +132,14 @@ accessible-name fallbacks for older layouts. A real click calls a private saved
 native scrolling function directly. This avoids a permissive interval after
 every user click, during which unrelated automatic scrolling could slip through.
 There is no polling loop that repeatedly drags your viewport back.
+
+The prompt navigator uses a separate, single-use exception: a trusted click on
+its rail or menu permits one `scrollIntoView` alignment to the start of a user
+message. Other scrolling APIs remain blocked. The permission expires after one
+second if unused and is cancelled by another manual gesture. This lets ChatGPT
+render its selected target without a general period of unrestricted scrolling.
+If a future interface uses another navigation mechanism, or target rendering
+takes longer than that limit, this control may need another compatibility fix.
 
 `settings.js` runs in Firefox's isolated extension world and passes only an on/off
 value to the guard. There is no message channel that gives the website extension

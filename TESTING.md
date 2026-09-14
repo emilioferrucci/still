@@ -1,3 +1,54 @@
+# Test report — Still 0.1.1
+
+## Prompt navigation regression, 14 September 2026
+
+Tested in Firefox Developer Edition 156.0 on macOS using the existing disposable
+long test chat. No existing personal chats were accessed or deleted.
+
+The right-hand prompt navigator was blocked in 0.1.0. Live diagnostics showed
+that an intentional menu click calls `scrollIntoView` on the selected user
+message with start alignment, followed by repeated scrolling requests. Both the
+compact rail and its expanded menu must be recognized.
+
+Version 0.1.1 permits one such request following a trusted navigation click,
+with a one-second expiry. Other scrolling methods remain blocked. The installed
+persistent XPI was verified as active version 0.1.1 and byte-identical to the
+built package. The live chat was reloaded to remove all prototype diagnostics.
+
+Live verification of the installed build:
+
+- Expanded menu: jump forward to prompt 6 and its F01 answer — passed.
+- Expanded menu: jump backward to prompt 2 and its B01 answer — passed.
+- Existing down-arrow button: jump to the end, showing F24/F25 — passed.
+- Manual upward scrolling from the bottom — passed.
+- Subsequent script attempts using `scrollTop`, `scrollTo`, and user-message
+  `scrollIntoView`: position remained exactly 28,576 CSS pixels — passed.
+
+The local Firefox lab passed **23/23 automated checks**, retaining the 19 cases
+below and adding synthetic compact/expanded menu clicks, an unrelated menu,
+and user-message scrolling without a trusted navigation action.
+
+Additional real UI clicks tested the compact rail, expanded menu, and a 250 ms
+delayed handler: each moved from 11,096 to 22,864.5 CSS pixels. An expired 1,200 ms
+handler and an unrelated menu left the position at 11,096. Requests before the
+allowed jump and subsequent synchronous, animation-frame, and timer requests
+remained blocked. These checks used the final guard source.
+
+An early real-click test caught an overly broad expanded-menu match. Requiring
+the fixed-position navigation container corrected it; the full suite and real
+click cases were rerun successfully. The pause test also needed a longer bounded
+wait for native CSS smooth scrolling; this changed the test, not extension behavior.
+
+Limits: this is targeted regression testing, not exhaustive coverage. The live
+compact rail was exercised, but its expanded menu provided the confirmed live
+destination checks; the compact handler was independently verified in the lab.
+Navigation taking longer than one second or changes to ChatGPT's markup/API may
+require another update. Cancellation by another manual gesture is implemented
+but was not independently timed in this run. The older quoted-reply and streaming
+results below are historical 0.1.0 tests, not newly repeated live tests for 0.1.1.
+
+---
+
 # Test report — Still 0.1.0
 
 Tested on 14 September 2026 using **Firefox 155.0.1 on macOS 15.6.1**.

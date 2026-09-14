@@ -1,6 +1,6 @@
 # Release preparation
 
-Status: experimental source version 0.1.0, prepared for publication on GitHub.
+Status: experimental source version 0.1.1, maintained on GitHub.
 No Mozilla Add-ons listing or signing request has been made. Review the test
 report and README disclaimers before any broader distribution.
 

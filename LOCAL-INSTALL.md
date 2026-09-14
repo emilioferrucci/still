@@ -12,7 +12,7 @@ Firefox itself has its own browser terms shown on first launch.
    `xpinstall.signatures.required`. Set it to `false`.
 3. Open `about:addons`. In the gear menu, select **Install Add-on From File…**.
 4. Build with `python3 scripts/package.py` from the repository root. Select
-   `dist/still-0.1.0-unsigned.xpi`, then confirm installation and access to
+   `dist/still-0.1.1-unsigned.xpi`, then confirm installation and access to
    `chatgpt.com`.
 5. Open a new ChatGPT tab. Sign in normally if needed: the separate profile does
    not inherit your other Firefox's login.
@@ -26,7 +26,8 @@ Edition profile. It does not change ordinary Firefox's signature enforcement.
 ## Use Still
 
 Still blocks automatic conversation scrolling. Manual scrolling and ChatGPT's
-existing down-arrow button continue to work. Open Firefox's Extensions menu →
+existing down-arrow button and right-hand prompt navigator continue to work.
+Open Firefox's Extensions menu →
 **Still — Manual Scroll for ChatGPT** to pause or resume protection.
 
 Reload open ChatGPT tabs after installing, updating, or removing the extension.

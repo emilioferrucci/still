@@ -7,6 +7,13 @@ const nativeTo = Element.prototype.scrollTo;
 const nativeTop = Object.getOwnPropertyDescriptor(Element.prototype, "scrollTop");
 const nativeIntoView = Element.prototype.scrollIntoView;
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+async function waitForPosition(element, top) {
+  const deadline = performance.now() + 2500;
+  while (Math.abs(element.scrollTop - top) >= 1 && performance.now() < deadline) await wait(50);
+  if (Math.abs(element.scrollTop - top) >= 1) {
+    throw new Error(`Native scroll did not settle at ${top}; actual ${element.scrollTop}`);
+  }
+}
 let nativeButtonCalls = 0;
 let runs = 0;
 function position(top) { nativeTo.call(viewport, {top, behavior: "instant"}); }
@@ -24,6 +31,9 @@ nested.className = "nested";
 nested.innerHTML = "<div>Nested code panel — independent horizontal and vertical scrolling</div>";
 turns.children[39].append(nested);
 const last = turns.lastElementChild;
+const navTarget = turns.children[80].querySelector("h2");
+navTarget.dataset.messageAuthorRole = "user";
+navTarget.dataset.messageId = "local-fixture-prompt";
 const initialTop = () => turns.children[39].offsetTop - viewport.offsetTop;
 const log = line => {
   const row = document.createElement("div");
@@ -88,6 +98,10 @@ async function run() {
       viewport.scrollTo(0, viewport.scrollHeight);
     });
     await check("synthetic bottom click doesn't bypass protection", () => document.getElementById("native-bottom").click());
+    await check("synthetic prompt menu cannot authorize navigation", () => document.getElementById("prompt-nav").click());
+    await check("synthetic rail cannot authorize navigation", () => document.getElementById("rail-nav").click());
+    await check("ordinary menu cannot authorize navigation", () => document.getElementById("unrelated-menu").click());
+    await check("user-message start alignment without intent remains blocked", () => navTarget.scrollIntoView({block: "start", behavior: "instant"}));
     await check("nested panel still scrolls", async () => {
       nested.scrollTo({top: 120, left: 90, behavior: "instant"});
       await wait(20);
@@ -104,8 +118,9 @@ async function run() {
         viewport.scrollTo({top: 500, behavior: "instant"});
         if (Math.abs(viewport.scrollTop - 500) > 1) throw new Error("Pause failed");
         viewport.scrollTop = 1000;
-        await wait(500); // CSS smooth scrolling also applies to scrollTop.
-        if (Math.abs(viewport.scrollTop - 1000) > 1) throw new Error("Paused setter failed");
+        // Wait for the result, not a fixed animation duration that varies with
+        // browser load/background throttling. CSS smooth applies to scrollTop.
+        await waitForPosition(viewport, 1000);
       } finally { position(initialTop()); on(true); }
     });
     await check("protection resumes", () => { viewport.scrollTop = 0; last.scrollIntoView(); });
@@ -138,6 +153,39 @@ document.getElementById("native-bottom").addEventListener("click", () => {
   viewport.scrollTo({top: viewport.scrollHeight, behavior: "smooth"});
 });
 document.getElementById("send").addEventListener("click", () => last.scrollIntoView({block: "end"}));
+for (const [id, delay] of [["rail-nav", 0], ["prompt-nav", 0], ["delayed-nav", 250], ["expired-nav", 1200], ["unrelated-menu", 0]]) {
+  document.getElementById(id).addEventListener("click", event => {
+    // Synthetic activation is part of the automated negative tests above.
+    if (!event.isTrusted) {
+      navTarget.scrollIntoView({block: "start", behavior: "instant"});
+      return;
+    }
+    position(initialTop());
+    const before = viewport.scrollTop;
+    const act = () => {
+      viewport.scrollTo({top: 0, behavior: "instant"});
+      last.scrollIntoView({block: "end", behavior: "instant"});
+      const unrelatedBlocked = viewport.scrollTop === before;
+      navTarget.scrollIntoView({block: "start", behavior: "instant"});
+      const landed = viewport.scrollTop;
+      const shouldMove = id !== "expired-nav" && id !== "unrelated-menu";
+      const matched = shouldMove ? Math.abs(landed - before) > 1000 : landed === before;
+      log(`${unrelatedBlocked && matched ? "PASS" : "FAIL"} trusted ${id}: ${before} → ${landed}; unrelated scroll blocked=${unrelatedBlocked}`);
+      // A consumed permission must not allow another start alignment, either
+      // synchronously or from a later animation frame/timer.
+      const check = () => {
+        position(initialTop());
+        navTarget.scrollIntoView({block: "start", behavior: "instant"});
+        viewport.scrollTop = 0;
+        log(`${viewport.scrollTop === before ? "PASS" : "FAIL"} ${id}: subsequent scrolling blocked`);
+      };
+      check();
+      requestAnimationFrame(check);
+      setTimeout(check, 100);
+    };
+    if (delay) setTimeout(act, delay); else act();
+  });
+}
 document.getElementById("storm").addEventListener("click", () => {
   let ticks = 0;
   const timer = setInterval(() => {

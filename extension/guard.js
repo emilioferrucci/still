@@ -19,6 +19,21 @@
   Object.defineProperty(window, INSTALL_KEY, {value: true, configurable: true});
   let enabled = true;
   let cachedRoot = null;
+  let navigationExpiresAt = 0;
+
+  function allowPromptNavigation(element, options) {
+    if (!navigationExpiresAt || performance.now() > navigationExpiresAt) {
+      navigationExpiresAt = 0;
+      return false;
+    }
+    // ChatGPT's prompt navigator first scrolls the selected user message into
+    // view, then retries/corrects with other APIs. Permit only that first
+    // message alignment, not general scrolling during a post-click grace period.
+    if (options?.block !== "start" ||
+        !element.matches('[data-message-author-role="user"][data-message-id]')) return false;
+    navigationExpiresAt = 0;
+    return true;
+  }
 
   // Keep originals private. The bottom button uses these directly; a click
   // never opens a time window in which unrelated automatic scrolls can escape.
@@ -80,7 +95,8 @@
     Object.defineProperty(Element.prototype, name, {
       ...descriptor,
       value: function (...args) {
-        if (enabled && affectsConversation(this)) return undefined;
+        if (enabled && affectsConversation(this) &&
+            !(name === "scrollIntoView" && allowPromptNavigation(this, args[0]))) return undefined;
         return Reflect.apply(original, this, args);
       }
     });
@@ -134,9 +150,36 @@
     return /^(scroll to bottom|scroll to the bottom|scroll down|jump to bottom)$/i.test(label);
   }
 
+  function isPromptNavigationButton(button) {
+    if (!button || button.disabled || !root()) return false;
+    if (button.closest('[data-testid^="conversation-turn-"], [data-turn-id], [data-message-author-role]')) return false;
+    if (button.hasAttribute("data-toc-item-index")) {
+      return /^\d+$/.test(button.getAttribute("data-toc-item-index"));
+    }
+    // Expanded prompt labels have no index themselves. The popover shares a
+    // parent with the compact, indexed rail. Do not match ordinary site menus.
+    const popover = button.closest('.popover[aria-hidden="false"]');
+    return button.classList.contains("__menu-item") &&
+      !!popover?.parentElement.closest(".fixed") &&
+      !!popover?.parentElement.querySelector("button[data-toc-item-index]");
+  }
+
+  // A pending navigation may wait briefly for ChatGPT to mount its target.
+  // Another manual gesture cancels it before it can affect later reading.
+  for (const name of ["pointerdown", "wheel", "touchstart", "keydown"]) {
+    window.addEventListener(name, event => {
+      if (event.isTrusted) navigationExpiresAt = 0;
+    }, {capture: true, passive: true});
+  }
+
   window.addEventListener("click", event => {
+    navigationExpiresAt = 0;
     if (!enabled || !event.isTrusted || event.button !== 0) return;
     const button = event.composedPath().find(node => node instanceof HTMLButtonElement);
+    if (isPromptNavigationButton(button)) {
+      navigationExpiresAt = performance.now() + 1000;
+      return; // Let ChatGPT choose and render the selected prompt itself.
+    }
     if (!isBottomButton(button)) return;
     const viewport = root();
     event.preventDefault();
@@ -152,6 +195,7 @@
   // could spoof it, but this channel grants no extension API access and never
   // reads, stores, or transmits conversation text.
   window.addEventListener(SETTINGS_EVENT, event => {
+    navigationExpiresAt = 0;
     if (event.detail === "on") enabled = true;
     if (event.detail === "off") enabled = false;
   });

@@ -23,6 +23,15 @@ section { padding: 12px; }
 <button id="storm">Start 15-second scroll storm</button>
 <span id="position"></span></header>
 <pre id="results" aria-live="polite">Ready. This page has 120 long sections. Its own test driver attempts scrolling.</pre>
+<div class="fixed"><div id="toc-harness">
+  <button data-toc-item-index="0" id="rail-nav">Prompt 1 (compact navigation)</button>
+  <div class="popover" aria-hidden="false">
+    <button class="__menu-item" id="prompt-nav">Navigate to prompt (immediate)</button>
+    <button class="__menu-item" id="delayed-nav">Navigate to prompt (250 ms delay)</button>
+    <button class="__menu-item" id="expired-nav">Expired navigation (1200 ms delay)</button>
+  </div>
+</div></div>
+<div class="popover" aria-hidden="false"><button class="__menu-item" id="unrelated-menu">Unrelated menu (must not jump)</button></div>
 <div data-scroll-root tabindex="0">
   <main id="main"><div id="thread"><div id="turns"></div>
     <div id="thread-bottom-container">

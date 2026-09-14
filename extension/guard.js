@@ -59,6 +59,43 @@
     return null;
   }
 
+  // ChatGPT can optimistically clear its away-from-bottom flag when starting
+  // a reply, even when our guard prevents the corresponding scroll. Its native
+  // arrow/streaming-dots button then becomes invisible. Keep this presentation
+  // flag consistent with geometry; never move the viewport to repair the flag.
+  let visibilityFrame = 0;
+  let observedViewport = null;
+  const resizeObserver = new ResizeObserver(scheduleBottomVisibility);
+  function scheduleBottomVisibility() {
+    if (!enabled || visibilityFrame) return;
+    visibilityFrame = requestAnimationFrame(syncBottomVisibility);
+  }
+  function syncBottomVisibility() {
+    visibilityFrame = 0;
+    if (!enabled) return;
+    const viewport = root();
+    if (viewport !== observedViewport) {
+      resizeObserver.disconnect();
+      observedViewport = viewport;
+      if (viewport) resizeObserver.observe(viewport);
+    }
+    if (!viewport?.hasAttribute("data-scroll-root")) return;
+    const away = viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop > 48;
+    if (viewport.hasAttribute("data-scroll-from-end") !== away) {
+      viewport.toggleAttribute("data-scroll-from-end", away);
+    }
+  }
+  const visibilityObserver = new MutationObserver(scheduleBottomVisibility);
+  visibilityObserver.observe(document, {
+    subtree: true, childList: true, characterData: true,
+    attributes: true, attributeFilter: ["data-scroll-from-end", "data-scroll-root"]
+  });
+  window.addEventListener("scroll", scheduleBottomVisibility, {capture: true, passive: true});
+  window.addEventListener("resize", scheduleBottomVisibility, {passive: true});
+  // Image/resource layout changes need not mutate DOM text or viewport size.
+  document.addEventListener("load", scheduleBottomVisibility, true);
+  scheduleBottomVisibility();
+
   function isViewport(element) {
     const viewport = root();
     return viewport !== null && (
@@ -198,6 +235,7 @@
     navigationExpiresAt = 0;
     if (event.detail === "on") enabled = true;
     if (event.detail === "off") enabled = false;
+    scheduleBottomVisibility();
   });
   window.dispatchEvent(new Event(READY_EVENT));
 })();

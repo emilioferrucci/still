@@ -13,6 +13,7 @@ section { padding: 12px; }
 .nested { overflow: auto; height: 100px; width: 300px; border: 1px solid; }
 .nested > div { height: 600px; width: 1200px; }
 #thread-bottom-container { position: sticky; bottom: 0; background: #d9eee3; padding: 6px 14px; }
+[data-scroll-root]:not([data-scroll-from-end]) #native-bottom-wrapper { opacity: 0; pointer-events: none; }
 #input { min-height: 30px; border: 1px solid #698; background: white; color: black; padding: 4px; }
 #outside { height: 75px; overflow-y: scroll; margin: 12px 18px; border: 1px dashed; }
 #outside > div { height: 500px; }
@@ -35,7 +36,7 @@ section { padding: 12px; }
 <div data-scroll-root tabindex="0">
   <main id="main"><div id="thread"><div id="turns"></div>
     <div id="thread-bottom-container">
-      <div style="--thread-scroll-to-bottom-banner-offset:0px"><button aria-hidden="true" tabindex="-1" id="native-bottom">↓ Bottom</button></div>
+      <div id="native-bottom-wrapper" style="--thread-scroll-to-bottom-banner-offset:0px"><button aria-hidden="true" tabindex="-1" id="native-bottom">↓ Bottom</button></div>
       <div id="input" contenteditable="true" role="textbox" aria-label="Test composer">Type here</div>
       <button id="send">Send (must not jump)</button>
     </div>

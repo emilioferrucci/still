@@ -97,7 +97,7 @@ release Firefox.
 For personal testing, **Firefox Developer Edition** supports persistent unsigned
 installation. Use its separate profile, set `xpinstall.signatures.required` to
 `false` in `about:config`, then open `about:addons` and choose the gear menu →
-**Install Add-on From File…** → `dist/still-0.1.1-unsigned.xpi` (build it below).
+**Install Add-on From File…** → `dist/still-0.1.2-unsigned.xpi` (build it below).
 Confirm the requested
 ChatGPT access. This installation survives restarts; no Mozilla signing submission
 or public listing is involved. The preference permits other unsigned extensions
@@ -132,6 +132,13 @@ accessible-name fallbacks for older layouts. A real click calls a private saved
 native scrolling function directly. This avoids a permissive interval after
 every user click, during which unrelated automatic scrolling could slip through.
 There is no polling loop that repeatedly drags your viewport back.
+
+ChatGPT can hide its bottom button after assuming that an automatic jump
+succeeded. Still repairs the site's `data-scroll-from-end` presentation flag
+from the actual distance to the bottom (48 CSS pixels). DOM changes, scrolling,
+resizes, and resource loads schedule a coalesced animation-frame check. This
+keeps the native arrow/streaming-dots control available without moving the page;
+these repairs stop while Still is paused.
 
 The prompt navigator uses a separate, single-use exception: a trusted click on
 its rail or menu permits one `scrollIntoView` alignment to the start of a user

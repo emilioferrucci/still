@@ -124,6 +124,36 @@ async function run() {
       } finally { position(initialTop()); on(true); }
     });
     await check("protection resumes", () => { viewport.scrollTop = 0; last.scrollIntoView(); });
+    await check("stream start restores hidden native button without moving", async () => {
+      viewport.removeAttribute("data-scroll-from-end");
+      viewport.setAttribute("data-stream-active", "");
+      await wait(100);
+      if (!viewport.hasAttribute("data-scroll-from-end")) throw new Error("Bottom button flag not restored");
+      if (getComputedStyle(document.getElementById("native-bottom").parentElement).opacity !== "1") throw new Error("Bottom button still hidden");
+      viewport.removeAttribute("data-stream-active");
+    });
+    await check("paused guard does not repair website visibility state", async () => {
+      on(false);
+      viewport.removeAttribute("data-scroll-from-end");
+      await wait(100);
+      if (viewport.hasAttribute("data-scroll-from-end")) throw new Error("Pause changed visibility state");
+      on(true);
+      await wait(100);
+      if (!viewport.hasAttribute("data-scroll-from-end")) throw new Error("Resume did not restore visibility");
+    });
+    total++;
+    position(viewport.scrollHeight);
+    await wait(100);
+    if (viewport.hasAttribute("data-scroll-from-end")) throw new Error("Button remains visible at bottom");
+    const growth = document.createElement("section");
+    growth.style.height = "500px";
+    turns.append(growth);
+    await wait(100);
+    if (!viewport.hasAttribute("data-scroll-from-end")) throw new Error("Streaming growth did not restore button");
+    growth.remove();
+    position(initialTop());
+    log("PASS button hides at bottom and returns when content grows");
+    passed++;
     // Root replacement simulates an SPA render. Keep content but replace its
     // viewport node, so stale cached element references fail this test.
     total++;

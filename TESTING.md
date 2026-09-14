@@ -1,3 +1,37 @@
+# Test report — Still 0.1.2
+
+## Generating-state bottom control, 14 September 2026
+
+Firefox Developer Edition 156.0, existing disposable long test chat.
+With 0.1.1, starting a response while reading an older answer removed the
+viewport's `data-scroll-from-end` flag despite a large measured distance from
+the bottom. The original button remained in the DOM, but its wrapper had
+computed opacity zero. Dispatching a scroll event did not repair that state.
+Restoring the flag made the native button reappear without moving the viewport.
+
+Version 0.1.2 synchronizes this presentation flag with actual geometry through
+event-driven, coalesced animation-frame checks. It does not replace the button
+or change its arrow/dots content. Repairs stop when protection is paused.
+
+The installed persistent 0.1.2 package was verified active and byte-identical
+to the built XPI, then the chat was reloaded. A new long test response showed
+the native three-dot button while generating. A real mouse click jumped from
+the first answer to the currently streaming response. A subsequent two-second
+measurement held exactly 37,631.5 CSS pixels while content grew by 260 pixels;
+generation was still active and the away-from-bottom flag was present.
+
+The Firefox lab passed **26/26 checks**: the previous 23 plus hidden-button
+recovery without scrolling, pause/resume of visibility repairs, and hiding at
+the bottom followed by reappearance when content grows. Extension lint reported
+zero errors, warnings, or notices. No permissions or network behavior changed.
+
+Limits: the visibility repair depends on ChatGPT's current presentation flag.
+It uses a 48 CSS pixel distance threshold. These tests do not establish behavior
+for every layout change, background-tab throttle, or future ChatGPT version.
+Prior reports below retain their original version-specific results.
+
+---
+
 # Test report — Still 0.1.1
 
 ## Prompt navigation regression, 14 September 2026

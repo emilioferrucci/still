@@ -1,3 +1,43 @@
+# Test report — Still 0.1.3
+
+## Submitted-quote navigation, 21 September 2026
+
+Tested in Firefox Developer Edition 156.0, using the existing disposable long
+test chat. Personal chats were not used for testing; no chats were deleted.
+
+Baseline: clicking the quotation above a submitted question attempted
+`scrollIntoView({behavior:"smooth",block:"nearest",inline:"nearest"})` on the
+original assistant paragraph. Version 0.1.2 blocked it. The quote is a direct
+button child of a user message, containing an icon and a clamped paragraph.
+
+Version 0.1.3 permits one matching earlier-assistant passage alignment after a
+trusted quote click, expiring after one second. It preserves the site's native
+source resolution and highlight. Other scroll APIs, end alignment, unrelated
+text, user-message destinations, and repeated requests remain blocked.
+
+Firefox lab: **28/28 automated checks passed** (previous 26 plus synthetic quote
+activation and passage scrolling without intent). Real UI clicks verified
+immediate and 250 ms delayed quote navigation: 11,096 → 2,666 CSS pixels. The
+1,200 ms expired case held 11,096. Unrelated requests before the allowed jump,
+and synchronous/delayed requests after consumption, remained blocked.
+
+Installed persistent XPI verified active, version 0.1.3, and byte-identical to
+the build. Reloading the dummy chat removed diagnostic wrappers. Real clicks
+on two submitted quotations returned to and highlighted the correct passages,
+B03 and C08. The existing right-hand prompt menu was used successfully to reach
+both quoted replies. Afterward, script attempts using `scrollTop`, `scrollTo`,
+and assistant-passage `scrollIntoView` held 19,030.083984375 CSS pixels.
+Extension lint reported zero errors, warnings, or notices.
+
+Limits: live cases covered ordinary text, including bold source text. Multiblock
+and mathematical quotations were not independently verified live. The quote
+must match the target's DOM text or rendered text after whitespace removal and
+Unicode normalization. Changed markup, unmatched text, or source mounting that
+takes over one second can require a future compatibility update. Earlier test
+reports below remain specific to their stated versions.
+
+---
+
 # Test report — Still 0.1.2
 
 ## Generating-state bottom control, 14 September 2026

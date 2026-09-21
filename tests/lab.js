@@ -34,6 +34,21 @@ const last = turns.lastElementChild;
 const navTarget = turns.children[80].querySelector("h2");
 navTarget.dataset.messageAuthorRole = "user";
 navTarget.dataset.messageId = "local-fixture-prompt";
+const quoteSource = turns.children[9];
+quoteSource.dataset.messageAuthorRole = "assistant";
+quoteSource.dataset.messageId = "fixture-source";
+const quoteTarget = quoteSource.querySelector("p");
+quoteTarget.textContent = "The blue moon rises above the fictional island. " + quoteTarget.textContent;
+const quoteMessage = document.createElement("div");
+quoteMessage.dataset.messageAuthorRole = "user";
+quoteMessage.dataset.messageId = "fixture-quoted-reply";
+for (const [id, label] of [["quote-now", "Quote now"], ["quote-delay", "Quote after 250ms"], ["quote-expired", "Quote after 1200ms"]]) {
+  const b = document.createElement("button");
+  b.type = "button"; b.id = id; b.title = label;
+  b.innerHTML = '<span aria-hidden="true"><svg></svg></span><p class="line-clamp-3">The blue moon rises above the fictional island.</p>';
+  quoteMessage.append(b);
+}
+document.getElementById("thread-bottom-container").prepend(quoteMessage);
 const initialTop = () => turns.children[39].offsetTop - viewport.offsetTop;
 const log = line => {
   const row = document.createElement("div");
@@ -98,6 +113,8 @@ async function run() {
       viewport.scrollTo(0, viewport.scrollHeight);
     });
     await check("synthetic bottom click doesn't bypass protection", () => document.getElementById("native-bottom").click());
+    await check("synthetic quote click cannot authorize navigation", () => document.getElementById("quote-now").click());
+    await check("source passage without quote intent stays blocked", () => quoteTarget.scrollIntoView({block: "nearest"}));
     await check("synthetic prompt menu cannot authorize navigation", () => document.getElementById("prompt-nav").click());
     await check("synthetic rail cannot authorize navigation", () => document.getElementById("rail-nav").click());
     await check("ordinary menu cannot authorize navigation", () => document.getElementById("unrelated-menu").click());
@@ -229,3 +246,28 @@ document.getElementById("storm").addEventListener("click", () => {
 viewport.addEventListener("scroll", () => {
   document.getElementById("position").textContent = `Top ${Math.round(viewport.scrollTop)} / ${viewport.scrollHeight - viewport.clientHeight}; site bottom handler calls ${nativeButtonCalls}`;
 });
+
+for (const [id, delay] of [["quote-now", 0], ["quote-delay", 250], ["quote-expired", 1200]]) {
+  document.getElementById(id).addEventListener("click", event => {
+    if (!event.isTrusted) { quoteTarget.scrollIntoView({block: "nearest"}); return; }
+    position(initialTop());
+    const before = viewport.scrollTop;
+    const act = async () => {
+      viewport.scrollTo(0, 0);
+      quoteTarget.scrollIntoView({block: "end"});
+      quoteSource.querySelector("h2").scrollIntoView({block: "nearest"});
+      navTarget.scrollIntoView({block: "start"});
+      const unrelatedBlocked = viewport.scrollTop === before;
+      quoteTarget.scrollIntoView({block: "nearest", behavior: "instant"});
+      const landed = viewport.scrollTop;
+      const moved = Math.abs(landed - before) > 1000;
+      log(`${unrelatedBlocked && moved === (delay < 1000) ? "PASS" : "FAIL"} trusted ${id}: ${before} → ${landed}; unrelated blocked=${unrelatedBlocked}`);
+      position(initialTop());
+      quoteTarget.scrollIntoView({block: "nearest", behavior: "instant"});
+      await wait(100);
+      quoteTarget.scrollIntoView({block: "nearest", behavior: "instant"});
+      log(`${viewport.scrollTop === before ? "PASS" : "FAIL"} ${id}: consumed or expired permission stays blocked`);
+    };
+    if (delay) setTimeout(act, delay); else act();
+  });
+}

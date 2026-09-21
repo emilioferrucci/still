@@ -20,18 +20,29 @@
   let enabled = true;
   let cachedRoot = null;
   let navigationExpiresAt = 0;
+  let quoteNavigation = null;
+
+  const normalizeQuote = text => (text || "").replace(/\s+/gu, "").normalize("NFC");
 
   function allowPromptNavigation(element, options) {
     if (!navigationExpiresAt || performance.now() > navigationExpiresAt) {
       navigationExpiresAt = 0;
+      quoteNavigation = null;
       return false;
     }
-    // ChatGPT's prompt navigator first scrolls the selected user message into
-    // view, then retries/corrects with other APIs. Permit only that first
-    // message alignment, not general scrolling during a post-click grace period.
-    if (options?.block !== "start" ||
+    if (quoteNavigation) {
+      const {message, text} = quoteNavigation;
+      const source = element.closest('[data-message-author-role="assistant"][data-message-id]');
+      // Let the site resolve and highlight the original passage. Only accept
+      // its observed nearest alignment to an earlier assistant message that
+      // contains the clicked quotation, never a general scroll-to-bottom call.
+      if (options?.block !== "nearest" || !source || !message.isConnected ||
+          !(source.compareDocumentPosition(message) & Node.DOCUMENT_POSITION_FOLLOWING) ||
+          ![element.textContent, element.innerText].some(value => normalizeQuote(value).includes(text))) return false;
+    } else if (options?.block !== "start" ||
         !element.matches('[data-message-author-role="user"][data-message-id]')) return false;
     navigationExpiresAt = 0;
+    quoteNavigation = null;
     return true;
   }
 
@@ -201,19 +212,33 @@
       !!popover?.parentElement.querySelector("button[data-toc-item-index]");
   }
 
+  function quotedReply(button) {
+    if (!button || button.disabled || !root()?.contains(button)) return null;
+    const message = button.parentElement;
+    // The submitted quote is a direct button child of the user message. The
+    // composer quote and message-action buttons must not grant navigation.
+    if (!message?.matches('[data-message-author-role="user"][data-message-id]') ||
+        button.type !== "button" || !button.querySelector(":scope > p.line-clamp-3") ||
+        !button.querySelector(':scope > span[aria-hidden="true"] svg')) return null;
+    const text = normalizeQuote(button.querySelector(":scope > p.line-clamp-3").textContent);
+    return text ? {message, text} : null;
+  }
+
   // A pending navigation may wait briefly for ChatGPT to mount its target.
   // Another manual gesture cancels it before it can affect later reading.
   for (const name of ["pointerdown", "wheel", "touchstart", "keydown"]) {
     window.addEventListener(name, event => {
-      if (event.isTrusted) navigationExpiresAt = 0;
+      if (event.isTrusted) { navigationExpiresAt = 0; quoteNavigation = null; }
     }, {capture: true, passive: true});
   }
 
   window.addEventListener("click", event => {
     navigationExpiresAt = 0;
+    quoteNavigation = null;
     if (!enabled || !event.isTrusted || event.button !== 0) return;
     const button = event.composedPath().find(node => node instanceof HTMLButtonElement);
-    if (isPromptNavigationButton(button)) {
+    quoteNavigation = quotedReply(button);
+    if (quoteNavigation || isPromptNavigationButton(button)) {
       navigationExpiresAt = performance.now() + 1000;
       return; // Let ChatGPT choose and render the selected prompt itself.
     }
@@ -233,6 +258,7 @@
   // reads, stores, or transmits conversation text.
   window.addEventListener(SETTINGS_EVENT, event => {
     navigationExpiresAt = 0;
+    quoteNavigation = null;
     if (event.detail === "on") enabled = true;
     if (event.detail === "off") enabled = false;
     scheduleBottomVisibility();

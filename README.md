@@ -61,6 +61,8 @@ telemetry, remote code, or runtime dependencies. Independent of OpenAI.
   New output after that does not automatically follow.
 - ChatGPT's right-hand prompt-navigation rail and expanded prompt menu allow
   deliberate jumps to earlier or later prompts and their answers.
+- Clicking the submitted quotation above a question returns to its original
+  assistant passage, preserving ChatGPT's highlight.
 - The toolbar popup pauses/resumes protection. The setting is stored locally.
 - Only `https://chatgpt.com/` is in scope. Nested editors, code panels, and other
   independently scrolling panels keep their normal scrolling methods.
@@ -97,7 +99,7 @@ release Firefox.
 For personal testing, **Firefox Developer Edition** supports persistent unsigned
 installation. Use its separate profile, set `xpinstall.signatures.required` to
 `false` in `about:config`, then open `about:addons` and choose the gear menu →
-**Install Add-on From File…** → `dist/still-0.1.2-unsigned.xpi` (build it below).
+**Install Add-on From File…** → `dist/still-0.1.3-unsigned.xpi` (build it below).
 Confirm the requested
 ChatGPT access. This installation survives restarts; no Mozilla signing submission
 or public listing is involved. The preference permits other unsigned extensions
@@ -147,6 +149,14 @@ second if unused and is cancelled by another manual gesture. This lets ChatGPT
 render its selected target without a general period of unrestricted scrolling.
 If a future interface uses another navigation mechanism, or target rendering
 takes longer than that limit, this control may need another compatibility fix.
+
+Submitted quote buttons have a separate single-use exception. A trusted click
+permits nearest-alignment `scrollIntoView` only within an earlier assistant
+message whose target text contains the quotation (ignoring whitespace and
+normalizing Unicode). The same one-second expiry and manual-gesture cancellation
+apply. Quote text stays in page memory briefly; it is not persisted or sent
+anywhere. Unrecognized markup or quote text that does not match the rendered
+source remains blocked rather than opening a general scrolling exception.
 
 `settings.js` runs in Firefox's isolated extension world and passes only an on/off
 value to the guard. There is no message channel that gives the website extension

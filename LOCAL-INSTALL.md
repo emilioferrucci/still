@@ -12,7 +12,7 @@ Firefox itself has its own browser terms shown on first launch.
    `xpinstall.signatures.required`. Set it to `false`.
 3. Open `about:addons`. In the gear menu, select **Install Add-on From File…**.
 4. Build with `python3 scripts/package.py` from the repository root. Select
-   `dist/still-0.1.3-unsigned.xpi`, then confirm installation and access to
+   `dist/still-0.1.4-unsigned.xpi`, then confirm installation and access to
    `chatgpt.com`.
 5. Open a new ChatGPT tab. Sign in normally if needed: the separate profile does
    not inherit your other Firefox's login.

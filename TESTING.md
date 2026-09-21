@@ -1,3 +1,46 @@
+# Test report — Still 0.1.4
+
+## Virtualized and mathematical quote navigation
+
+Verified in normal Firefox 156.0 on macOS. The user explicitly authorized
+inspection of the affected project conversation. No messages were submitted,
+edited, or deleted. Private chat contents and identifiers are omitted here.
+
+The native baseline revealed two-stage navigation: an empty, non-intersecting
+turn placeholder receives nearest-alignment scrollIntoView to mount the source,
+then the source passage receives another request. Version 0.1.3 blocked the
+placeholder. An equation-only case also contained invisible U+200B characters
+in the source that were absent from the submitted quotation.
+
+The fix permits one earlier empty placeholder and restricts the following
+passage request to that same turn. It retains quote text matching, assistant-role
+checks, expiry, and consumed-intent blocking. Matching ignores zero-width layout
+characters. The user message may unmount between the two stages.
+
+Live normal-Firefox checks: the mixed text/formula quotation and the equation-only
+quotation both returned to their correct sources with native highlighting.
+Still was loaded through about:debugging, and reloaded after the final code change;
+the conversation was reloaded to remove diagnostic wrappers. This is a temporary
+installation lasting until Firefox exits, not a signed persistent installation.
+Firefox Developer Edition was not used or updated in this task.
+
+The existing lab passed **28/28 checks** in normal Firefox. A separate real-click
+fixture passed placeholder mounting, removal of the clicked message, rejection
+of a different source, mathematical text containing an invisible separator, and
+consumption of the permission: before 16,736, landing 3,902, blocked subsequent
+request 16,736 CSS pixels. The fixture initially compared positions relative to
+a landmark whose height changed; it was corrected to use a fixed native position.
+After live quote navigation, scrollTop, scrollTo, and an unrequested passage
+scrollIntoView held 2,762.35009765625 CSS pixels.
+Extension lint reported zero errors, warnings, or notices.
+
+Remaining limits: the one-second deadline and recognized markup still apply.
+Multiple-placeholder loading sequences and arbitrary cross-block selections
+have not been exhaustively tested. Prior reports below retain their original
+version-specific results.
+
+---
+
 # Test report — Still 0.1.3
 
 ## Submitted-quote navigation, 21 September 2026

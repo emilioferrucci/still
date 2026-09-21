@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Still — Manual Scroll for ChatGPT",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Read at your own pace. Stops ChatGPT's automatic conversation scrolling while keeping manual scrolling and its bottom button.",
   "permissions": ["storage"],
   "host_permissions": ["https://chatgpt.com/*"],

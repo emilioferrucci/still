@@ -22,7 +22,7 @@
   let navigationExpiresAt = 0;
   let quoteNavigation = null;
 
-  const normalizeQuote = text => (text || "").replace(/\s+/gu, "").normalize("NFC");
+  const normalizeQuote = text => (text || "").replace(/[\s\u200B-\u200D\u2060\uFEFF]+/gu, "").normalize("NFC");
 
   function allowPromptNavigation(element, options) {
     if (!navigationExpiresAt || performance.now() > navigationExpiresAt) {
@@ -31,14 +31,24 @@
       return false;
     }
     if (quoteNavigation) {
-      const {message, text} = quoteNavigation;
+      const {message, text, sourceTurn} = quoteNavigation;
+      if (options?.block !== "nearest") return false;
+      // A virtualized answer is initially only an empty height placeholder.
+      // Allow one earlier placeholder to mount, then restrict the final jump
+      // to that exact turn. The clicked user message can itself unmount meanwhile.
+      if (!sourceTurn && element.matches('[data-turn-id-container][data-is-intersecting="false"]') &&
+          !element.textContent.trim() && root()?.contains(element) && message.isConnected &&
+          (element.compareDocumentPosition(message) & Node.DOCUMENT_POSITION_FOLLOWING)) {
+        quoteNavigation.sourceTurn = element.getAttribute("data-turn-id-container");
+        return true;
+      }
       const source = element.closest('[data-message-author-role="assistant"][data-message-id]');
-      // Let the site resolve and highlight the original passage. Only accept
-      // its observed nearest alignment to an earlier assistant message that
-      // contains the clicked quotation, never a general scroll-to-bottom call.
-      if (options?.block !== "nearest" || !source || !message.isConnected ||
-          !(source.compareDocumentPosition(message) & Node.DOCUMENT_POSITION_FOLLOWING) ||
-          ![element.textContent, element.innerText].some(value => normalizeQuote(value).includes(text))) return false;
+      if (!source) return false;
+      if (sourceTurn) {
+        if (source.closest("[data-turn-id-container]")?.getAttribute("data-turn-id-container") !== sourceTurn) return false;
+      } else if (!message.isConnected ||
+          !(source.compareDocumentPosition(message) & Node.DOCUMENT_POSITION_FOLLOWING)) return false;
+      if (![element.textContent, element.innerText].some(value => normalizeQuote(value).includes(text))) return false;
     } else if (options?.block !== "start" ||
         !element.matches('[data-message-author-role="user"][data-message-id]')) return false;
     navigationExpiresAt = 0;

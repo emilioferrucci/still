@@ -271,3 +271,39 @@ for (const [id, delay] of [["quote-now", 0], ["quote-delay", 250], ["quote-expir
     if (delay) setTimeout(act, delay); else act();
   });
 }
+
+// Reproduce virtualized source mounting and invisible math layout separators.
+const virtualButton = document.getElementById("quote-now").cloneNode(true);
+virtualButton.id = "quote-virtual";
+virtualButton.title = "Virtualized mathematical quote";
+virtualButton.querySelector("p").textContent = "A = B + C";
+quoteMessage.append(virtualButton);
+virtualButton.addEventListener("click", async event => {
+  if (!event.isTrusted) return;
+  position(initialTop());
+  const before = viewport.scrollTop;
+  const placeholder = document.createElement("div");
+  placeholder.dataset.turnIdContainer = "fixture-virtual-source";
+  placeholder.dataset.isIntersecting = "false";
+  placeholder.style.height = "200px";
+  quoteSource.prepend(placeholder);
+  placeholder.scrollIntoView({block: "nearest", behavior: "instant"});
+  const mounted = viewport.scrollTop !== before;
+  // The clicked message can disappear when virtualization mounts its source.
+  quoteMessage.remove();
+  const source = document.createElement("div");
+  source.dataset.turnIdContainer = "fixture-virtual-source";
+  source.innerHTML = '<div data-message-author-role="assistant" data-message-id="fixture-math"><p>A = B\u200B + C</p></div>';
+  placeholder.replaceWith(source);
+  position(before);
+  const wrong = quoteTarget;
+  wrong.scrollIntoView({block: "nearest", behavior: "instant"});
+  const wrongBlocked = viewport.scrollTop === before;
+  source.querySelector("p").scrollIntoView({block: "nearest", behavior: "instant"});
+  const landed = viewport.scrollTop;
+  position(before);
+  source.querySelector("p").scrollIntoView({block: "nearest", behavior: "instant"});
+  log(`${mounted && wrongBlocked && landed !== before && viewport.scrollTop === before ? "PASS" : "FAIL"} virtualized mathematical quote: mounted=${mounted}, wrongBlocked=${wrongBlocked}, before=${before}, landed=${landed}, after=${viewport.scrollTop}`);
+  source.remove();
+  document.getElementById("thread-bottom-container").prepend(quoteMessage);
+});

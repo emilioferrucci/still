@@ -99,7 +99,7 @@ release Firefox.
 For personal testing, **Firefox Developer Edition** supports persistent unsigned
 installation. Use its separate profile, set `xpinstall.signatures.required` to
 `false` in `about:config`, then open `about:addons` and choose the gear menu →
-**Install Add-on From File…** → `dist/still-0.1.3-unsigned.xpi` (build it below).
+**Install Add-on From File…** → `dist/still-0.1.4-unsigned.xpi` (build it below).
 Confirm the requested
 ChatGPT access. This installation survives restarts; no Mozilla signing submission
 or public listing is involved. The preference permits other unsigned extensions
@@ -151,9 +151,12 @@ If a future interface uses another navigation mechanism, or target rendering
 takes longer than that limit, this control may need another compatibility fix.
 
 Submitted quote buttons have a separate single-use exception. A trusted click
-permits nearest-alignment `scrollIntoView` only within an earlier assistant
+permits nearest-alignment `scrollIntoView` within an earlier assistant
 message whose target text contains the quotation (ignoring whitespace and
-normalizing Unicode). The same one-second expiry and manual-gesture cancellation
+normalizing Unicode, including invisible math spacing). If the answer is
+virtualized, one preceding empty turn placeholder may first scroll into view
+to load it; the final passage jump is then restricted to that exact turn.
+The same one-second expiry and manual-gesture cancellation
 apply. Quote text stays in page memory briefly; it is not persisted or sent
 anywhere. Unrecognized markup or quote text that does not match the rendered
 source remains blocked rather than opening a general scrolling exception.

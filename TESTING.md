@@ -1,3 +1,175 @@
+# Test report — Still 0.1.6
+
+## Reopened-history regression, 26 September 2026
+
+Version 0.1.5 changed the modern ChatGPT viewport from `column-reverse` to
+`column`, replacing native negative scroll coordinates with positive ones. A
+virtualizer that expects reverse coordinates can then mount the wrong content,
+as the new fixture demonstrates. This is the suspected cause of the reported
+live regression; the exact live blank state was not reproduced. Testing
+already-rendered messages did not cover this risk.
+Version 0.1.6 removes that layout override entirely. It compensates for output
+growth by measuring a visible element, subtracting native/manual movement from
+its displacement, and using a private native scroll method only for the remaining
+layout displacement. Pause/resume never changes the site's layout.
+
+### Repeatable normal-Firefox checks
+
+The rewritten `tests/modern.html` fixture contains 80 placeholders but mounts
+only nearby text. Its virtualizer uses native reverse coordinates. Against the
+packaged 0.1.5 guard, all five older-history positions failed to mount visible
+text; the later growth test consequently could not find a visible paragraph.
+Against 0.1.6, **30/30 checks passed**, including remounting in both directions,
+negative coordinates, API blocking, simultaneous manual movement and growth,
+growth above and below the reading position, viewport resize, pause/resume,
+footer recovery, nested panels, and SPA viewport replacement.
+
+Real wheel scrolling and Page Up mounted earlier numbered sections. A trusted
+bottom click reached section 80, and a subsequent 600-pixel output expansion
+preserved the measured content position. The legacy fixture passed **28/28**. Trusted prompt-rail and virtualized
+mathematical quote clicks also passed, including rejection of a wrong source
+and subsequent automatic scroll requests.
+These are fixture results; live reopened-history evidence is recorded separately.
+
+JavaScript syntax checks passed. Mozilla web-ext lint reported **0 errors,
+0 warnings, 0 notices**; its optional update checker could not write its config.
+No extension permissions or network behavior changed.
+
+### Live reopened-history check
+
+Used normal Firefox only for the revised-build tests. Two new test chats were
+created; no chats were deleted and no personal chat was used for testing. A
+second chat used Instant for generated fixtures after Pro generation was slow.
+Its history contains two long invented guides and short numbered exchanges.
+The original Pro setting was restored before the browser restart.
+
+Quit normal Firefox completely, launched it again, and temporarily loaded the
+packaged 0.1.6 XPI. On opening the saved test chat, both earlier guide markers
+were absent from the DOM: only 10 message units were mounted, the content height
+was 1,243 CSS pixels, and native `column-reverse` was intact. Native wheel and
+Home-key scrolling loaded successive older batches. Both long guides and the
+first numbered paragraphs became readable. After loading, height was 15,307
+pixels; `scrollTo`, `scrollTop`, and passage `scrollIntoView` held the viewport
+at -14,810.2001953125 CSS pixels. A second reload again showed only the
+latest five exchanges; scrolling loaded both older guides again. The native
+bottom button and scrolling down through loaded content remained usable.
+
+During real streaming before restart, the HISTORY-A-START passage stayed at
+168.6999969482422 CSS pixels while content height grew from 3,388 to 3,700 and
+scrollTop changed from -2,806.199951171875 to -3,118.050048828125. This checks
+visible text stability, rather than treating a fixed scrollTop as success.
+
+**Limit:** the exact live blank-text symptom was not reproduced in the generated
+chat with 0.1.5: one initially absent older guide did load after scrolling. The
+old build's failure is reproducible in the reverse-coordinate virtualization
+fixture. The new build removes that incompatible layout change, and live
+fresh-session history loading passed, but this is not proof that every cause
+of blank content in much larger chats is resolved. No revised build was
+installed or tested in Developer Edition; installation there is left to the
+user. No security settings were changed.
+
+---
+
+# Test report — Still 0.1.5 (superseded: history-loading regression)
+
+**Known failure:** this version changed ChatGPT’s reverse flex layout and broke
+loading older, unmounted messages. The tests below did not cover reopening a long
+conversation with unloaded history. Their passing results were insufficient to
+establish compatibility. Do not use 0.1.5.
+
+## ChatGPT layout change, 26 September 2026
+
+Tested in normal Firefox 156.0 on macOS, first loading the existing 0.1.4
+source temporarily. Its previous temporary installation had disappeared after
+Firefox exited. One new, generated test chat was created for this task. No
+personal chats were used for testing, and no chats were deleted.
+
+### Reproduced failure and fix
+
+The new live interface had neither `data-scroll-root` nor the older conversation
+turn/message markers. Its scrolling element was
+`.thread-scroll-container[data-app-action-timeline-scroll]`, using
+`display:flex; flex-direction:column-reverse`. Still's installed marker was
+present, but a programmatic `scrollTo` escaped: -5,498.45 → 0 CSS pixels.
+
+The guard now recognizes the new viewport. On this single-content-child layout,
+it uses ordinary column flow while enabled, preventing native bottom-following
+as output grows. Pause restores reverse flow. The transition translates scroll
+coordinates using the content's bounding rectangle to preserve the visible
+passage. It also supports the new footer bottom control and observes content
+resizes so its visibility can recover after layout-only growth. Existing
+navigation restrictions remain in place; buttons inside new message wrappers
+cannot impersonate prompt or bottom controls.
+
+### Newly observed live behavior
+
+- Updated guard: `scrollTo`, `scrollTop`, and passage `scrollIntoView` left
+  10,068.2998046875 CSS pixels unchanged.
+- Selected an ordinary passage in the generated B answer and submitted a quoted
+  follow-up requesting a long C answer. Samples held scrollTop at 13,853.25 and
+  the source paragraph's screen coordinate at 188.89999389648438 while content
+  height grew from 17,991 to 18,935 CSS pixels.
+- Clicked the native bottom button during that response. The viewport then held
+  19,478.25 while content grew from 20,417 to 20,695 CSS pixels: the click did not
+  enable continuous following.
+- The new submitted-selection pill displayed a text preview. No source-navigation
+  scroll request was observed from its preview; the paused baseline also showed
+  no navigation. This build preserves source links on supported older layouts;
+  it does not add a source-link feature to a preview-only site control.
+- The new interface did not expose the older indexed right-hand prompt rail in
+  this test chat. Its compatibility was checked in the legacy real-browser lab.
+
+Temporary diagnostics were removed by reloading the new test chat.
+
+### Real Firefox regression labs
+
+`tests/modern.html`: **25/25 automated checks passed**, including new-root API
+blocking, delayed requests, growth while reading and at bottom, layout-only
+button recovery, pause/resume coordinate preservation, nested/unrelated panels,
+and replacement of the viewport during SPA rendering. A real bottom click
+followed by 600 pixels of growth held 11,830 CSS pixels. A real click on a
+message button carrying misleading bottom and prompt markers stayed blocked.
+Manual wheel scrolling moved the visible fixture from section 11 to section 13.
+
+`tests/lab.html`: **28/28 automated checks passed**. Separate trusted clicks
+passed compact and expanded prompt navigation, 250 ms delayed navigation,
+1,200 ms expiry, immediate and delayed quotes, consumed permissions, and the
+virtualized mathematical quote fixture. A later background-tab rerun timed out
+waiting for native CSS smooth scrolling in the paused test; keeping the lab in
+the foreground and rerunning produced 28/28 with no failures. The virtualized
+test mounted the placeholder, blocked a wrong source, landed at 3,902.5 from 16,736, and blocked
+another request after consumption. These fixtures contain invented data only.
+
+JavaScript syntax checks passed. Mozilla web-ext lint: **0 errors, 0 warnings,
+0 notices**. Its optional update check could not write its local configuration;
+that did not affect the lint results. Packages were built with the repository's
+standard-library packaging script. No permissions or network behavior changed.
+
+### Developer Edition installation
+
+At the user's request, installed the persistent 0.1.5 XPI in Firefox Developer
+Edition 157.0, replacing 0.1.4. Add-ons Manager showed 0.1.5 enabled; its popup
+showed protection on. Installed metadata reported active `app-profile`, with
+neither user nor application disabling it. The installed XPI matched the build:
+
+`ce404b55f8b2bd07c976e29ea0f6e73f806510da04142550e1a1892a395048a5`
+
+The user explicitly waived further live testing in Developer Edition. Personal
+chat tabs were left untouched and must be reloaded by the user to use the new
+guard. No browser security preferences were changed and no signing submission
+was made.
+
+### Limits
+
+This is targeted compatibility testing, not exhaustive coverage. The current
+layout normalization is restricted to the observed reverse-flow viewport with
+one in-flow child. Future markup, localized control names, multiple in-flow
+children, content removal, and arbitrary cross-block quotations remain possible
+compatibility limits. The prior one-second navigation deadline still applies.
+Reports below retain their historical version-specific results.
+
+---
+
 # Test report — Still 0.1.4
 
 ## Virtualized and mathematical quote navigation

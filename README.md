@@ -61,8 +61,9 @@ telemetry, remote code, or runtime dependencies. Independent of OpenAI.
   New output after that does not automatically follow.
 - ChatGPT's right-hand prompt-navigation rail and expanded prompt menu allow
   deliberate jumps to earlier or later prompts and their answers.
-- Clicking the submitted quotation above a question returns to its original
-  assistant passage, preserving ChatGPT's highlight.
+- Where ChatGPT provides a submitted quotation source link, clicking it returns
+  to the original assistant passage, preserving ChatGPT's highlight. The newer
+  selection-preview popover did not offer that navigation in the tested UI.
 - The toolbar popup pauses/resumes protection. The setting is stored locally.
 - Only `https://chatgpt.com/` is in scope. Nested editors, code panels, and other
   independently scrolling panels keep their normal scrolling methods.
@@ -99,7 +100,7 @@ release Firefox.
 For personal testing, **Firefox Developer Edition** supports persistent unsigned
 installation. Use its separate profile, set `xpinstall.signatures.required` to
 `false` in `about:config`, then open `about:addons` and choose the gear menu →
-**Install Add-on From File…** → `dist/still-0.1.4-unsigned.xpi` (build it below).
+**Install Add-on From File…** → `dist/still-0.1.6-unsigned.xpi` (build it below).
 Confirm the requested
 ChatGPT access. This installation survives restarts; no Mozilla signing submission
 or public listing is involved. The preference permits other unsigned extensions
@@ -126,8 +127,15 @@ No listing has been submitted or published as part of this local development.
 `guard.js` runs at `document_start` in the page's MAIN JavaScript world. It wraps
 the conversation's scrolling APIs (`scrollIntoView`, `scrollTo`, `scrollBy`,
 `scroll`, and the `scrollTop` setter), plus `focus({preventScroll:true})` where
-focus could scroll the conversation. It uses the current `data-scroll-root`
-element, with a fallback for older conversation layouts.
+focus could scroll the conversation. It recognizes both the older `data-scroll-root` viewport and the current
+`.thread-scroll-container[data-app-action-timeline-scroll]` viewport, with a
+fallback for older conversation layouts. The current layout uses reverse flex
+flow, which follows growing output even without JavaScript scroll calls. Still preserves
+that native reverse flow and its negative scroll coordinates, which the site
+needs to load older messages. On layout changes, it measures a visible passage
+and compensates for displacement caused by growing content, accounting for
+manual scrolling separately. It never changes the conversation flex direction.
+This check is event-driven, not a polling loop.
 
 The native bottom button is recognized by its dedicated footer wrapper, with
 accessible-name fallbacks for older layouts. A real click calls a private saved
@@ -140,7 +148,10 @@ succeeded. Still repairs the site's `data-scroll-from-end` presentation flag
 from the actual distance to the bottom (48 CSS pixels). DOM changes, scrolling,
 resizes, and resource loads schedule a coalesced animation-frame check. This
 keeps the native arrow/streaming-dots control available without moving the page;
-these repairs stop while Still is paused.
+these repairs stop while Still is paused. On the current layout, Still instead
+repairs the existing footer button's visibility, pointer access, and keyboard
+focusability while away from the bottom. A content resize observer also handles
+layout growth that does not change DOM text.
 
 The prompt navigator uses a separate, single-use exception: a trusted click on
 its rail or menu permits one `scrollIntoView` alignment to the start of a user
@@ -192,14 +203,17 @@ Node, npm, or Python.
 The local browser regression page is `tests/lab.html`. It deliberately attempts
 automatic scrolling and includes controls for manual gesture stress testing.
 The lab loads the actual `guard.js` source; it has no network dependencies and
-contains only generated test text. Do not package `tests/` inside the extension.
+contains only generated test text. `tests/modern.html` covers the current reverse
+layout and changed markup. Do not package `tests/` inside the extension.
 
 ## Permissions and privacy
 
 The only API permission is `storage`, used for the on/off preference. Host access
 is limited to `chatgpt.com` because page code must be intercepted there. The
-extension uses element structure and scroll geometry; it does not read message
-text, copy chats, make network requests, or record browsing history. Its manifest
+extension uses element structure and scroll geometry. For supported quote-source
+navigation, it briefly compares the clicked quotation with candidate passage
+text in page memory. It does not copy chats, persist quote text, make network
+requests, or record browsing history. Its manifest
 declares no data collection. See [PRIVACY.md](PRIVACY.md).
 
 If reporting a problem, provide the browser version and reproduction steps using

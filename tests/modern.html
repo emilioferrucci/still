@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Still — current ChatGPT layout regression lab</title>
+<style>
+body { font: 16px/1.5 system-ui; margin: 16px; }
+button { padding: 8px; margin: 4px; }
+#results { height: 180px; overflow: auto; white-space: pre-wrap; }
+.thread-scroll-container { display: flex; flex-direction: column-reverse; height: 420px; overflow-y: auto; overflow-anchor: none; border: 2px solid #176348; }
+#content { flex: none; min-height: 100%; width: 100%; }
+section { height: 220px; padding: 16px; box-sizing: border-box; }
+[data-thread-scroll-footer] { position: absolute; right: 35px; bottom: 30px; background: #d9eee3; }
+#bottom { opacity: 0; pointer-events: none; }
+#nested, #outside { height: 70px; width: 200px; overflow: auto; }
+#nested > div, #outside > div { height: 350px; width: 500px; }
+</style>
+<h1>Current layout: reverse flow, new markers, native footer</h1>
+<button id="run">Run current-layout checks</button>
+<button id="place">Place near older history</button>
+<button id="grow">Grow output after bottom jump</button>
+<pre id="results" aria-live="polite">Ready.</pre>
+<div class="thread-scroll-container" data-app-action-timeline-scroll tabindex="0">
+  <div id="content" data-thread-user-message-navigation-content>
+    <div id="turns"></div>
+    <div id="nested"><div>Independent nested panel</div></div>
+  </div>
+  <div data-thread-scroll-footer>
+    <button id="bottom" aria-label="Scroll to bottom" aria-hidden="true" tabindex="-1">Bottom (native control)</button>
+    <button id="send">Send (must remain blocked)</button>
+  </div>
+</div>
+<div id="outside"><div>Unrelated scroll panel</div></div>
+<script src="modern.js"></script>
+<script src="../extension/guard.js"></script>
+</html>

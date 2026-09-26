@@ -21,6 +21,9 @@
   let cachedRoot = null;
   let navigationExpiresAt = 0;
   let quoteNavigation = null;
+  const MODERN_ROOT = '.thread-scroll-container[data-app-action-timeline-scroll]';
+  const USER_MESSAGE = '[data-message-author-role="user"][data-message-id], [data-chatgpt-search-unit-key$=":user"][data-chatgpt-search-message-ids]';
+  const ASSISTANT_MESSAGE = '[data-message-author-role="assistant"][data-message-id], [data-chatgpt-search-unit-key$=":assistant"][data-chatgpt-search-message-ids]';
 
   const normalizeQuote = text => (text || "").replace(/[\s\u200B-\u200D\u2060\uFEFF]+/gu, "").normalize("NFC");
 
@@ -42,7 +45,7 @@
         quoteNavigation.sourceTurn = element.getAttribute("data-turn-id-container");
         return true;
       }
-      const source = element.closest('[data-message-author-role="assistant"][data-message-id]');
+      const source = element.closest(ASSISTANT_MESSAGE);
       if (!source) return false;
       if (sourceTurn) {
         if (source.closest("[data-turn-id-container]")?.getAttribute("data-turn-id-container") !== sourceTurn) return false;
@@ -50,7 +53,7 @@
           !(source.compareDocumentPosition(message) & Node.DOCUMENT_POSITION_FOLLOWING)) return false;
       if (![element.textContent, element.innerText].some(value => normalizeQuote(value).includes(text))) return false;
     } else if (options?.block !== "start" ||
-        !element.matches('[data-message-author-role="user"][data-message-id]')) return false;
+        !element.matches(USER_MESSAGE)) return false;
     navigationExpiresAt = 0;
     quoteNavigation = null;
     return true;
@@ -60,10 +63,53 @@
   // never opens a time window in which unrelated automatic scrolls can escape.
   const nativeScrollTo = Element.prototype.scrollTo;
   const nativeFocus = HTMLElement.prototype.focus;
+  let readingAnchor = null;
+
+  // Keep the site's native coordinate system. Its virtualizer interprets
+  // negative scrollTop values; changing column-reverse to column makes it
+  // mount the wrong messages (or no messages at all).
+  function syncReadingAnchor(viewport) {
+    if (!enabled || !viewport?.matches(MODERN_ROOT) ||
+        getComputedStyle(viewport).flexDirection !== "column-reverse") {
+      readingAnchor = null;
+      return;
+    }
+    const previous = readingAnchor;
+    if (previous?.viewport === viewport && previous.element.isConnected &&
+        viewport.contains(previous.element)) {
+      // Account for native/manual movement since the last observation. Only
+      // compensate displacement caused by layout, not a wheel/keyboard scroll.
+      const displacement = previous.element.getBoundingClientRect().top - previous.y +
+        viewport.scrollTop - previous.top;
+      if (Math.abs(displacement) > 0.75) {
+        Reflect.apply(nativeScrollTo, viewport, [{
+          top: viewport.scrollTop + displacement,
+          left: viewport.scrollLeft, behavior: "instant"
+        }]);
+      }
+    }
+    const bounds = viewport.getBoundingClientRect();
+    let element = null;
+    for (const fraction of [0.4, 0.25, 0.6]) {
+      const hit = document.elementFromPoint(
+        Math.max(0, Math.min(innerWidth - 1, bounds.left + bounds.width / 2)),
+        Math.max(0, Math.min(innerHeight - 1, bounds.top + bounds.height * fraction))
+      );
+      const candidate = hit?.closest('p, h1, h2, h3, h4, pre, li, table, [data-user-message-bubble]');
+      if (candidate && viewport.contains(candidate) &&
+          !candidate.closest('[data-thread-scroll-footer], [contenteditable="true"]')) {
+        element = candidate;
+        break;
+      }
+    }
+    element ||= viewport.firstElementChild;
+    readingAnchor = element ? {viewport, element,
+      top: viewport.scrollTop, y: element.getBoundingClientRect().top} : null;
+  }
 
   function root() {
     if (cachedRoot?.isConnected) return cachedRoot;
-    cachedRoot = document.querySelector("[data-scroll-root]");
+    cachedRoot = document.querySelector(`[data-scroll-root], ${MODERN_ROOT}`);
     if (cachedRoot) return cachedRoot;
 
     // Older ChatGPT layouts: find the scrollable ancestor of an actual turn,
@@ -86,6 +132,26 @@
   // flag consistent with geometry; never move the viewport to repair the flag.
   let visibilityFrame = 0;
   let observedViewport = null;
+  let observedContent = null;
+  const buttonRepairs = new Map();
+
+  function restoreButtons() {
+    for (const [button, saved] of buttonRepairs) {
+      for (const [name, value, priority] of saved.styles) {
+        if (value) button.style.setProperty(name, value, priority);
+        else button.style.removeProperty(name);
+      }
+      for (const [name, value] of saved.attributes) {
+        if (value === null) button.removeAttribute(name);
+        else button.setAttribute(name, value);
+      }
+    }
+    buttonRepairs.clear();
+  }
+
+  function modernBottomButton(viewport) {
+    return viewport?.querySelector('[data-thread-scroll-footer] button[aria-label="Scroll to bottom"]');
+  }
   const resizeObserver = new ResizeObserver(scheduleBottomVisibility);
   function scheduleBottomVisibility() {
     if (!enabled || visibilityFrame) return;
@@ -95,23 +161,45 @@
     visibilityFrame = 0;
     if (!enabled) return;
     const viewport = root();
-    if (viewport !== observedViewport) {
+    syncReadingAnchor(viewport);
+    const content = viewport?.matches(MODERN_ROOT) ? viewport.firstElementChild : null;
+    if (viewport !== observedViewport || content !== observedContent) {
       resizeObserver.disconnect();
       observedViewport = viewport;
+      observedContent = content;
       if (viewport) resizeObserver.observe(viewport);
+      if (content) resizeObserver.observe(content);
     }
-    if (!viewport?.hasAttribute("data-scroll-root")) return;
-    const away = viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop > 48;
-    if (viewport.hasAttribute("data-scroll-from-end") !== away) {
+    if (!viewport) return;
+    const reverse = getComputedStyle(viewport).flexDirection === "column-reverse";
+    const away = (reverse ? -viewport.scrollTop : viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop) > 48;
+    if (viewport.hasAttribute("data-scroll-root") && viewport.hasAttribute("data-scroll-from-end") !== away) {
       viewport.toggleAttribute("data-scroll-from-end", away);
+    }
+    const button = modernBottomButton(viewport);
+    if (!away || !button || [...buttonRepairs.keys()].some(saved => saved !== button)) restoreButtons();
+    if (away && button) {
+      if (!buttonRepairs.has(button)) buttonRepairs.set(button, {
+        styles: ["opacity", "pointer-events"].map(name =>
+          [name, button.style.getPropertyValue(name), button.style.getPropertyPriority(name)]),
+        attributes: ["aria-hidden", "tabindex"].map(name => [name, button.getAttribute(name)])
+      });
+      button.style.setProperty("opacity", "1", "important");
+      button.style.setProperty("pointer-events", "auto", "important");
+      if (button.getAttribute("aria-hidden") !== "false") button.setAttribute("aria-hidden", "false");
+      if (button.getAttribute("tabindex") !== "0") button.setAttribute("tabindex", "0");
     }
   }
   const visibilityObserver = new MutationObserver(scheduleBottomVisibility);
   visibilityObserver.observe(document, {
     subtree: true, childList: true, characterData: true,
-    attributes: true, attributeFilter: ["data-scroll-from-end", "data-scroll-root"]
+    attributes: true, attributeFilter: ["data-scroll-from-end", "data-scroll-root", "data-app-action-timeline-scroll", "aria-hidden", "tabindex"]
   });
-  window.addEventListener("scroll", scheduleBottomVisibility, {capture: true, passive: true});
+  window.addEventListener("scroll", event => {
+    const viewport = root();
+    if (event.target === viewport) syncReadingAnchor(viewport);
+    scheduleBottomVisibility();
+  }, {capture: true, passive: true});
   window.addEventListener("resize", scheduleBottomVisibility, {passive: true});
   // Image/resource layout changes need not mutate DOM text or viewport size.
   document.addEventListener("load", scheduleBottomVisibility, true);
@@ -193,6 +281,7 @@
 
   function isBottomButton(button) {
     if (!button || button.disabled || !root()?.contains(button)) return false;
+    if (button === modernBottomButton(root())) return true;
 
     // The current button has aria-hidden=true and no accessible name. Identify
     // its dedicated footer wrapper, never the arrow-shaped Send button.
@@ -203,14 +292,14 @@
 
     // Older layouts expose a name. Constrain these fallbacks to the footer or
     // outside messages so similarly named buttons in answers aren't captured.
-    if (button.closest('[data-testid^="conversation-turn-"], article[data-turn-id]')) return false;
+    if (button.closest(`[data-testid^="conversation-turn-"], article[data-turn-id], ${USER_MESSAGE}, ${ASSISTANT_MESSAGE}`)) return false;
     const label = button.getAttribute("aria-label") || button.getAttribute("title") || "";
     return /^(scroll to bottom|scroll to the bottom|scroll down|jump to bottom)$/i.test(label);
   }
 
   function isPromptNavigationButton(button) {
     if (!button || button.disabled || !root()) return false;
-    if (button.closest('[data-testid^="conversation-turn-"], [data-turn-id], [data-message-author-role]')) return false;
+    if (button.closest(`[data-testid^="conversation-turn-"], [data-turn-id], [data-message-author-role], ${USER_MESSAGE}, ${ASSISTANT_MESSAGE}`)) return false;
     if (button.hasAttribute("data-toc-item-index")) {
       return /^\d+$/.test(button.getAttribute("data-toc-item-index"));
     }
@@ -257,7 +346,7 @@
     event.preventDefault();
     event.stopImmediatePropagation();
     Reflect.apply(nativeScrollTo, viewport, [{
-      top: viewport.scrollHeight,
+      top: getComputedStyle(viewport).flexDirection === "column-reverse" ? 0 : viewport.scrollHeight,
       left: viewport.scrollLeft,
       behavior: "instant"
     }]);
@@ -271,6 +360,8 @@
     quoteNavigation = null;
     if (event.detail === "on") enabled = true;
     if (event.detail === "off") enabled = false;
+    readingAnchor = null;
+    if (!enabled) restoreButtons();
     scheduleBottomVisibility();
   });
   window.dispatchEvent(new Event(READY_EVENT));

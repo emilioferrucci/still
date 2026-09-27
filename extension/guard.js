@@ -63,6 +63,7 @@
   // Keep originals private. The bottom button uses these directly; a click
   // never opens a time window in which unrelated automatic scrolls can escape.
   const nativeScrollTo = Element.prototype.scrollTo;
+  const nativeScrollBy = Element.prototype.scrollBy;
   const nativeFocus = HTMLElement.prototype.focus;
   let readingAnchor = null;
 
@@ -88,9 +89,13 @@
       // visible drift. Ignore only noise smaller than a browser layout unit.
       if (Math.abs(displacement) > 0.01) {
         const before = viewport.scrollTop;
-        Reflect.apply(nativeScrollTo, viewport, [{
-          top: before + displacement,
-          left: viewport.scrollLeft, behavior: "instant"
+        // This is a layout delta, not a new absolute reading destination.
+        // Firefox carries relative updates through its compositor separately;
+        // absolute scrollTo updates can overwrite an in-flight visual offset
+        // and briefly paint the text at the wrong position even when the DOM
+        // measurements taken before paint already look correct.
+        Reflect.apply(nativeScrollBy, viewport, [{
+          top: displacement, left: 0, behavior: "instant"
         }]);
         // Firefox can round scroll requests to physical pixels. Keep that
         // rounding error in the next anchor instead of losing a fraction on
@@ -221,16 +226,30 @@
       if (button.getAttribute("tabindex") !== "0") button.setAttribute("tabindex", "0");
     }
   }
-  const visibilityObserver = new MutationObserver(() => {
+  const visibilityObserver = new MutationObserver(records => {
+    const viewport = root();
+    // Virtualizers also change layout through inline styles and classes,
+    // including from their own ResizeObserver callbacks. An ancestor resize
+    // caused that late can be deferred by the browser's observer depth limit.
+    // Handle the mutation microtask instead of waiting for the next frame.
+    // Ignore our own repeated footer styles and unrelated page styling: those
+    // must not schedule an endless repair/mutation/animation-frame cycle.
+    const relevant = records.some(record => {
+      if (record.type !== "attributes" ||
+          !["style", "class"].includes(record.attributeName)) return true;
+      if (record.attributeName === "style" && buttonRepairs.has(record.target)) return false;
+      return viewport && (viewport.contains(record.target) || record.target.contains(viewport));
+    });
+    if (!relevant) return;
     // DOM updates can also arrive after our rAF callback, or change a passage's
     // position without resizing the content box. Correct in this microtask,
     // before the browser paints, rather than showing the intermediate layout.
-    syncReadingAnchor(root());
+    syncReadingAnchor(viewport);
     scheduleBottomVisibility();
   });
   visibilityObserver.observe(document, {
     subtree: true, childList: true, characterData: true,
-    attributes: true, attributeFilter: ["data-scroll-from-end", "data-scroll-root", "data-app-action-timeline-scroll", "aria-hidden", "tabindex"]
+    attributes: true, attributeFilter: ["data-scroll-from-end", "data-scroll-root", "data-app-action-timeline-scroll", "aria-hidden", "tabindex", "style", "class"]
   });
   window.addEventListener("scroll", event => {
     const viewport = root();

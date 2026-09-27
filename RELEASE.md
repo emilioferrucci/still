@@ -1,6 +1,8 @@
 # Release preparation
 
-Status: experimental source version 0.1.7, maintained on GitHub.
+Status: experimental source version 0.1.8, maintained on GitHub. This is a
+candidate mitigation for severe rendered jitter reported with 0.1.7. The
+rendered result still needs confirmation; geometry-only tests are insufficient.
 No Mozilla Add-ons listing or signing request has been made. Review the test
 report and README disclaimers before any broader distribution.
 

@@ -100,7 +100,7 @@ release Firefox.
 For personal testing, **Firefox Developer Edition** supports persistent unsigned
 installation. Use its separate profile, set `xpinstall.signatures.required` to
 `false` in `about:config`, then open `about:addons` and choose the gear menu →
-**Install Add-on From File…** → `dist/still-0.1.7-unsigned.xpi` (build it below).
+**Install Add-on From File…** → `dist/still-0.1.8-unsigned.xpi` (build it below).
 Confirm the requested
 ChatGPT access. This installation survives restarts; no Mozilla signing submission
 or public listing is involved. The preference permits other unsigned extensions
@@ -135,7 +135,16 @@ that native reverse flow and its negative scroll coordinates, which the site
 needs to load older messages. On layout changes, it measures a visible passage
 and compensates for displacement caused by growing content, accounting for
 manual scrolling separately. Mutation and resize callbacks correct the passage
-before paint, rather than scheduling a next-frame snap back. Still retains a
+before paint, rather than scheduling a next-frame snap back. The mutation observer
+includes layout changes made through inline styles and classes: a virtualizer's
+resize callback can change an ancestor after that ancestor's resize notifications
+have already run. Still ignores its own footer style repairs to avoid a feedback
+loop. Layout compensation
+uses native relative `scrollBy` deltas, so Firefox can apply the change to its
+existing compositor scroll position. An explicit bottom click still uses an
+absolute destination. This addresses a suspected compositor interaction; passing
+DOM geometry checks alone does not establish that rendered jitter is fixed.
+Still retains a
 visible passage through reflow and carries fractional scroll rounding forward
 to prevent accumulated drift. It never changes the conversation flex direction.
 These checks are event-driven, not a polling loop.

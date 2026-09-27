@@ -45,6 +45,38 @@ async function checkFrames(change, {manual = false, paused = false} = {}) {
   probe.remove();
   return {samples, maxError};
 }
+// A virtualizer can update an ancestor's layout from a descendant's resize
+// callback. That ancestor's resize notification may be deferred to the next
+// frame by the ResizeObserver depth limit. A shallow sampling probe would
+// change that limit and conceal the failure, so sample at the microtask
+// checkpoint after the simulated site's callback instead.
+async function checkLateLayout(change) {
+  await place(-5000);
+  const anchor = visibleText()[0], expected = y(anchor);
+  const probe = document.createElement("i");
+  probe.style.cssText = "display:block;width:1px;height:1px;visibility:hidden";
+  document.getElementById("nested").firstElementChild.append(probe);
+  let step = 0, samples = 0, maxError = 0;
+  await new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      observer.disconnect(); probe.remove(); reject(new Error("late-layout sampling timed out"));
+    }, 15000);
+    const observer = new ResizeObserver(() => {
+      if (step) {
+        change(step);
+        queueMicrotask(() => {
+          samples++;
+          maxError = Math.max(maxError, Math.abs(y(anchor) - expected));
+          if (step === 24) { clearTimeout(timeout); observer.disconnect(); resolve(); }
+          else requestAnimationFrame(() => { step++; probe.style.width = `${step + 1}px`; });
+        });
+      } else requestAnimationFrame(() => { step++; probe.style.width = `${step + 1}px`; });
+    });
+    observer.observe(probe);
+  });
+  probe.remove();
+  return {samples, maxError};
+}
 const log = text => {
   const row = document.createElement("div"); row.textContent = text; results.append(row);
   results.scrollTop = results.scrollHeight;
@@ -200,6 +232,25 @@ document.getElementById("run").addEventListener("click", async event => {
       turns.lastElementChild.style.height = `${turns.lastElementChild.offsetHeight + 5}px`;
     });
     check(`resume restores pre-paint stability: max error ${resumed.maxError.toFixed(2)}px`, resumed.samples === 36 && resumed.maxError < 1);
+    for (const [name, change] of [
+      ["inline style", () => {
+        turns.lastElementChild.style.height = `${turns.lastElementChild.offsetHeight + 28}px`;
+      }],
+      ["class change", step => {
+        turns.classList.toggle("late-layout-gap", step % 2 === 1);
+      }]
+    ]) {
+      const sample = await checkLateLayout(change);
+      check(`layout changed by ${name} inside a site's resize callback: ${sample.samples} samples, max error ${sample.maxError.toFixed(2)}px`,
+        sample.samples === 24 && sample.maxError < 1);
+    }
+    await wait(150);
+    let idleRepairs = 0;
+    const repairObserver = new MutationObserver(records => { idleRepairs += records.length; });
+    repairObserver.observe(bottom, {attributes: true, attributeFilter: ["style"]});
+    await wait(250);
+    repairObserver.disconnect();
+    check(`footer repairs settle without a mutation feedback loop: ${idleRepairs} idle writes`, idleRepairs === 0);
     log(`RESULT ${passed}/${total} passed. Real wheel, keyboard, bottom click, and live history loading still required.`);
   } catch (error) { log(`ERROR ${error.message}`); }
   finally { on(true); document.getElementById("run").disabled = false; }

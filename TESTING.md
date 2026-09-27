@@ -1,4 +1,115 @@
-# Test report — Still 0.1.7
+# Test report — Still 0.1.8 candidate
+
+## Rendered jitter investigation, 28 September 2026
+
+The user's local video confirms that **0.1.7 still has severe rendered jitter**.
+All 4,056 frames of the 67.65-second, approximately 60 fps recording were decoded.
+Consecutive-frame inspection found an 18-recording-pixel displacement followed
+by a snap back; another burst displaced text by approximately 92 recording
+pixels. These are recording pixels, not CSS pixels. The video and derived
+diagnostics remain private and are not included in this repository or packages.
+
+The 0.1.7 geometry tests below were insufficient to rule out this defect. Their
+results must not be read as confirmation that the user's rendering problem was
+fixed. Sparse screenshots also missed single-frame displacement.
+
+The initial 0.1.8 candidate changed the native method used to compensate layout
+growth: it sent a relative `scrollBy` delta instead of an absolute `scrollTo` target.
+The explicit bottom button still uses an absolute destination. Native reverse
+coordinates, the site's virtualizer, API interception, and permissions remain
+unchanged.
+
+Mozilla's implementation distinguishes these paths:
+[Element.cpp](https://raw.githubusercontent.com/mozilla-firefox/firefox/main/dom/base/Element.cpp)
+dispatches to separate absolute and relative frame methods;
+[ScrollContainerFrame.cpp](https://raw.githubusercontent.com/mozilla-firefox/firefox/main/layout/generic/ScrollContainerFrame.cpp)
+uses `ScrollOrigin::Relative` for relative CSS-pixel scrolling. The compositor
+can apply relative updates to its existing sampled positions. A mismatch between
+absolute corrections and the compositor's visual offset is a **hypothesis** for
+the recorded defect, not an independently proven root cause. That change alone
+was insufficient in the targeted late-layout regression below.
+
+### Reproduced missing observation path
+
+The guard observed text mutations but excluded `style` and `class` attributes.
+A site's ResizeObserver callback can change an ancestor's layout through those
+attributes after the guard's callback has run. ResizeObserver's depth limit can
+defer the resulting ancestor notification to the next frame. See the W3C
+[notification algorithm](https://drafts.csswg.org/resize-observer/#broadcast-resize-observations).
+
+Two added tests simulate that sequence using a deep resize target, then measure
+at the callback's microtask checkpoint. They deliberately avoid a shallow resize
+probe: such a probe changes the observer depth limit and can allow extra ancestor
+notifications that conceal the defect. The relative-scroll-only candidate passed
+the original 38 tests but failed both new tests: **28 CSS pixels** of displacement
+for inline styles and **40 CSS pixels** for class changes, over 24 samples each.
+
+The revised 0.1.8 also observes relevant inline-style and class mutations. It
+ignores unrelated styling and the guard's own footer style writes so that a
+repair cannot perpetually schedule another repair. Both new regressions now
+have **zero displacement**. An additional idle check recorded zero footer style
+writes after layout settled. The relative-delta adjustment is retained, but is
+not credited with fixing these two reproduced failures.
+
+### Current validation
+
+Tested in Firefox Developer Edition 157 on macOS. The current-layout fixture
+passed **41/41** checks, including virtualized history, negative coordinates,
+blocked automatic APIs, nested panels, viewport replacement, pause/resume, and
+the eight frame-level scenarios. Protected whole-pixel scenarios had zero
+maximum error; fractional growth reached 0.60 CSS pixels and internal reflow
+0.60 CSS pixels. The paused negative control detected over 100 pixels of native
+movement. These are geometry tests, not compositor video measurements.
+
+The legacy fixture passed **28/28**. A trusted prompt-navigation click reached
+its target while unrelated scrolling stayed blocked. The virtualized
+mathematical-quote check mounted the source, rejected the wrong source, and
+preserved blocking after the deliberate jump.
+
+The initial candidate was installed persistently and verified enabled as version
+0.1.8 before the missing observation path was identified. That earlier package
+is superseded by the revised build. The revised XPI was then installed through
+the normal add-on manager, verified enabled, and loaded by reloading only the
+authorized test branch. A wrapper stack location matched the revised source,
+distinguishing it from the earlier same-version candidate. Its SHA-256 is
+`ed2f950ab3eeb03acaaf2d0b0fde0319c851299ff231f98a0ce232f1758b1f19`.
+JavaScript syntax and whitespace checks passed. Mozilla web-ext lint reported
+zero errors, warnings, and notices; its optional update checker could not write
+its config.
+
+### Live follow-up and reopened history
+
+Only the explicitly authorized test branch was used for live messages. A
+preliminary measurement accidentally selected a composer paragraph; that run
+was discarded. The corrected probe required a paragraph in an assistant answer
+and excluded the footer and every editable element.
+
+The validated paragraph stayed connected. Across 65 changed-geometry samples
+at the normal viewport height, its top ranged from **137.483 to 138.583 CSS
+pixels** while conversation height ranged from **17,522 to 18,112 pixels**.
+The monitor ran 11,308 frame callbacks overall. This covers the measured
+follow-up submission and response-layout changes, not independently recorded
+compositor output or every thinking-to-answer transition.
+
+After another reload, real upward scrolling reached readable earlier
+mathematical passages. The viewport retained native `column-reverse` coordinates.
+This live check did not independently establish that an older server-side
+pagination batch was initially absent; the fixture's genuinely unmounted
+history checks provide the repeatable coverage for that case. All temporary
+monitoring loops were stopped and a reload cleared their page state. No chats
+were deleted and no unrelated conversation was opened.
+
+### Recording limitation
+
+A local, explicitly authorized window-recording attempt failed: Firefox's
+`getDisplayMedia` returned `NotFoundError` after the permission prompt, without
+providing a capture source. No new video was recorded. Browser/security settings
+were not changed. The supplied video proves the old defect; it does not prove
+the candidate removes it. Rendered jitter remains unverified for this candidate.
+
+---
+
+# Historical test report — Still 0.1.7 (rendered jitter subsequently confirmed)
 
 ## Streaming jitter regression, 27 September 2026
 

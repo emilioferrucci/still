@@ -24,6 +24,7 @@
   const MODERN_ROOT = '.thread-scroll-container[data-app-action-timeline-scroll]';
   const USER_MESSAGE = '[data-message-author-role="user"][data-message-id], [data-chatgpt-search-unit-key$=":user"][data-chatgpt-search-message-ids]';
   const ASSISTANT_MESSAGE = '[data-message-author-role="assistant"][data-message-id], [data-chatgpt-search-unit-key$=":assistant"][data-chatgpt-search-message-ids]';
+  const READING_PASSAGE = 'p, h1, h2, h3, h4, pre, li, table, [data-user-message-bubble]';
 
   const normalizeQuote = text => (text || "").replace(/[\s\u200B-\u200D\u2060\uFEFF]+/gu, "").normalize("NFC");
 
@@ -75,36 +76,59 @@
       return;
     }
     const previous = readingAnchor;
+    let remainder = 0;
     if (previous?.viewport === viewport && previous.element.isConnected &&
         viewport.contains(previous.element)) {
       // Account for native/manual movement since the last observation. Only
       // compensate displacement caused by layout, not a wheel/keyboard scroll.
       const displacement = previous.element.getBoundingClientRect().top - previous.y +
         viewport.scrollTop - previous.top;
-      if (Math.abs(displacement) > 0.75) {
+      // Fractional line/box growth is real layout movement too. Discarding
+      // subpixel deltas while refreshing the anchor lets them accumulate into
+      // visible drift. Ignore only noise smaller than a browser layout unit.
+      if (Math.abs(displacement) > 0.01) {
+        const before = viewport.scrollTop;
         Reflect.apply(nativeScrollTo, viewport, [{
-          top: viewport.scrollTop + displacement,
+          top: before + displacement,
           left: viewport.scrollLeft, behavior: "instant"
         }]);
+        // Firefox can round scroll requests to physical pixels. Keep that
+        // rounding error in the next anchor instead of losing a fraction on
+        // every token. Discard larger errors from clamping at a scroll limit;
+        // they must not turn into a delayed jump when more content arrives.
+        const error = displacement - (viewport.scrollTop - before);
+        if (Math.abs(error) < 1) remainder = error;
       }
     }
     const bounds = viewport.getBoundingClientRect();
     let element = null;
+    // Keep a visible passage instead of repeatedly swapping it for the outer
+    // content box when a hit-test happens to land in a gap between paragraphs.
+    // That box cannot track internal reflow whose total height is unchanged.
+    const visiblePassage = candidate => {
+      if (!candidate || !viewport.contains(candidate) ||
+          candidate.closest('[data-thread-scroll-footer], [contenteditable="true"]')) return false;
+      const rect = candidate.getBoundingClientRect();
+      return rect.bottom > Math.max(0, bounds.top) && rect.top < Math.min(innerHeight, bounds.bottom);
+    };
+    if (previous?.viewport === viewport && previous.element.matches(READING_PASSAGE) &&
+        visiblePassage(previous.element)) element = previous.element;
     for (const fraction of [0.4, 0.25, 0.6]) {
+      if (element) break;
       const hit = document.elementFromPoint(
         Math.max(0, Math.min(innerWidth - 1, bounds.left + bounds.width / 2)),
         Math.max(0, Math.min(innerHeight - 1, bounds.top + bounds.height * fraction))
       );
-      const candidate = hit?.closest('p, h1, h2, h3, h4, pre, li, table, [data-user-message-bubble]');
-      if (candidate && viewport.contains(candidate) &&
-          !candidate.closest('[data-thread-scroll-footer], [contenteditable="true"]')) {
+      const candidate = hit?.closest(READING_PASSAGE);
+      if (visiblePassage(candidate)) {
         element = candidate;
         break;
       }
     }
+    if (!element) element = [...viewport.querySelectorAll(READING_PASSAGE)].find(visiblePassage);
     element ||= viewport.firstElementChild;
     readingAnchor = element ? {viewport, element,
-      top: viewport.scrollTop, y: element.getBoundingClientRect().top} : null;
+      top: viewport.scrollTop, y: element.getBoundingClientRect().top - remainder} : null;
   }
 
   function root() {
@@ -152,7 +176,14 @@
   function modernBottomButton(viewport) {
     return viewport?.querySelector('[data-thread-scroll-footer] button[aria-label="Scroll to bottom"]');
   }
-  const resizeObserver = new ResizeObserver(scheduleBottomVisibility);
+  // Resize notifications run after layout and before paint. Deferring the
+  // reading correction to rAF here leaves a whole frame of displaced text on
+  // screen, followed by a snap back (especially during streamed output).
+  // Only the footer presentation may wait until the next animation frame.
+  const resizeObserver = new ResizeObserver(() => {
+    syncReadingAnchor(root());
+    scheduleBottomVisibility();
+  });
   function scheduleBottomVisibility() {
     if (!enabled || visibilityFrame) return;
     visibilityFrame = requestAnimationFrame(syncBottomVisibility);
@@ -190,7 +221,13 @@
       if (button.getAttribute("tabindex") !== "0") button.setAttribute("tabindex", "0");
     }
   }
-  const visibilityObserver = new MutationObserver(scheduleBottomVisibility);
+  const visibilityObserver = new MutationObserver(() => {
+    // DOM updates can also arrive after our rAF callback, or change a passage's
+    // position without resizing the content box. Correct in this microtask,
+    // before the browser paints, rather than showing the intermediate layout.
+    syncReadingAnchor(root());
+    scheduleBottomVisibility();
+  });
   visibilityObserver.observe(document, {
     subtree: true, childList: true, characterData: true,
     attributes: true, attributeFilter: ["data-scroll-from-end", "data-scroll-root", "data-app-action-timeline-scroll", "aria-hidden", "tabindex"]

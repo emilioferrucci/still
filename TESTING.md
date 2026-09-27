@@ -1,3 +1,92 @@
+# Test report — Still 0.1.7
+
+## Streaming jitter regression, 27 September 2026
+
+Tested in **normal Firefox 156.0.1 on macOS**, never Firefox Developer Edition.
+The 0.1.6 reading-anchor correction ran from a scheduled animation frame, even
+when triggered by a resize notification after that frame's callbacks. This
+allowed one frame of displaced text to render before the next-frame correction.
+The existing tests waited 150 ms and missed that intermediate movement.
+
+The guard now corrects layout displacement directly in mutation and resize
+callbacks before paint. Footer presentation remains coalesced in rAF. It keeps
+a visible passage as its anchor across internal reflow, and carries forward
+fractional errors from Firefox's scroll rounding instead of accumulating drift.
+JavaScript scroll requests are still intercepted before they execute; native
+reverse flow, negative coordinates, manual input, and navigation are preserved.
+
+### Frame-level browser checks
+
+`tests/modern.html` now samples after layout with a ResizeObserver created after
+the guard's observer. A separate fixed probe changes size each frame, ensuring
+samples even when conversation height stays constant. Updates occur inside rAF,
+with idle frames between growth updates, exercising the former late correction.
+These are pre-paint geometry samples, not a recording of the compositor output.
+
+Unmodified **0.1.6 passed the original 30 checks but failed both initial new
+streaming checks**, with up to **17 CSS pixels** of displacement, including
+when manual movement coincided with output growth. That provides a repeatable
+regression without requiring a private conversation or an intermittent live event.
+The complete expanded suite scored **31/38** against 0.1.6: all seven protected
+frame-level scenarios failed; the paused negative control correctly detected
+movement. Subpixel drift reached 9.6 pixels and viewport resizing reached 45 pixels.
+
+The revised guard passed **38/38** checks. Each of the eight frame-sampling
+scenarios collected 36 samples: streaming, streaming plus manual movement,
+shrinkage, fractional growth, internal DOM reflow with unchanged total height,
+viewport resize, paused negative control, and resumed protection. Protected
+whole-pixel scenarios had 0-pixel maximum error; fractional growth and internal
+reflow stayed within 0.4 pixels without cumulative drift. The paused negative
+control exposed over 100 pixels of native reverse-flow movement, confirming
+that the sampler detects the problem when protection is absent.
+
+The legacy fixture passed **28/28**. A real compact prompt-rail click reached
+its target while subsequent unrelated programmatic scrolls stayed blocked.
+
+### Live follow-up streaming
+
+A new chat containing only invented botanical guides was used. While a second
+long answer streamed, an already completed paragraph remained connected and
+between 106.75 and 107.25 CSS pixels across 49 resize samples. Conversation
+height grew from 4,454 to 5,944 pixels. Normal Firefox's page zoom was 110%.
+Screenshots showed readable earlier text before and during the follow-up.
+Real wheel scrolling in both directions and the native bottom button worked.
+
+An earlier measurement of the first answer became invalid when the streaming
+paragraph was replaced by the site; it is not counted as passing evidence.
+The completed-paragraph follow-up measurement above did not have that problem.
+
+### Initially unloaded history
+
+Restarted normal Firefox, reloaded the packaged 0.1.7 temporarily, and extended
+the same invented-data chat to 12 exchanges. In a fresh page, both long-guide
+markers were absent: 18 message units, height 2,126 CSS pixels, scrollTop
+-517.3833618164062, with native `column-reverse` intact. Earlier attempts with
+a shorter history loaded everything, so those were not counted as an unloaded
+history test.
+
+Real upward wheel gestures fetched the older batch. Both guide markers appeared,
+and screenshots showed readable text through the first guide's opening
+paragraphs. After loading, height was 8,764 pixels. `scrollTo`, a `scrollTop`
+assignment, and paragraph `scrollIntoView` left -8,155.75 unchanged. Temporary
+page diagnostics were cleared by reloading the test tab.
+
+JavaScript syntax and whitespace checks passed. Mozilla web-ext lint reported
+0 errors, 0 warnings, and 0 notices; its optional update checker could not write
+its config. The tested XPI's guard and manifest match the source. Its ID,
+host access, and permissions match 0.1.6. Developer Edition was not accessed or
+updated. Normal Firefox has a temporary 0.1.7 installation until it exits.
+
+### Scope and limits
+
+The frame-level regression is reproducible. The user's exact intermittent live
+jitter has no known reproduction and was not independently reproduced in a
+personal chat. These results cover the observed failure mechanism, not every
+possible animation or site layout change. No personal chats were used, no chats
+were deleted, and no browser security settings or extension permissions changed.
+
+---
+
 # Test report — Still 0.1.6
 
 ## Reopened-history regression, 26 September 2026

@@ -11,6 +11,40 @@ const on = enabled => window.dispatchEvent(new CustomEvent("still-scroll:setting
 const position = top => nativeTo.call(viewport, {top, behavior: "instant"});
 const y = element => element.getBoundingClientRect().top;
 const close = (a, b) => Math.abs(a - b) < 1;
+// Sample after layout, before paint. A check made 150 ms later misses a frame
+// of displaced text followed by a correction, which is visible as jitter.
+async function checkFrames(change, {manual = false, paused = false} = {}) {
+  await place(-5000);
+  const anchor = visibleText()[0], start = y(anchor);
+  const probe = document.createElement("div");
+  probe.style.cssText = "position:fixed;top:0;left:0;width:1px;height:1px;pointer-events:none;visibility:hidden";
+  document.body.append(probe);
+  let step = 0, samples = 0, maxError = 0, expected = start;
+  // The guard's observer was registered first. This observer samples the
+  // final layout of each update, including changes made inside an rAF callback.
+  await new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      observer.disconnect(); probe.remove(); reject(new Error("pre-paint sampling timed out; keep the fixture in the foreground"));
+    }, 15000);
+    const observer = new ResizeObserver(() => {
+      if (step) {
+        samples++;
+        maxError = Math.max(maxError, Math.abs(y(anchor) - expected));
+      }
+      if (step === 36) { clearTimeout(timeout); observer.disconnect(); resolve(); return; }
+      requestAnimationFrame(() => {
+        step++;
+        if (manual) { position(viewport.scrollTop - 3); expected += 3; }
+        if (step % 3 !== 0) change(step);
+        if (!paused) viewport.scrollTo({top: 0, behavior: "smooth"});
+        probe.style.width = `${step + 1}px`;
+      });
+    });
+    observer.observe(probe);
+  });
+  probe.remove();
+  return {samples, maxError};
+}
 const log = text => {
   const row = document.createElement("div"); row.textContent = text; results.append(row);
   results.scrollTop = results.scrollHeight;
@@ -131,6 +165,41 @@ document.getElementById("run").addEventListener("click", async event => {
     turns.lastElementChild.style.height = "1700px";
     await wait(150);
     check("manual movement survives simultaneous output growth", close(y(anchor), before + 120));
+    for (const manual of [false, true]) {
+      const sample = await checkFrames(step => {
+        turns.lastElementChild.style.height = `${turns.lastElementChild.offsetHeight + (step % 2 ? 5 : 17)}px`;
+      }, {manual});
+      check(`every pre-paint position during streaming${manual ? " plus manual movement" : ""}: ${sample.samples} samples, max error ${sample.maxError.toFixed(2)}px`,
+        sample.samples === 36 && sample.maxError < 1);
+    }
+    for (const [name, change] of [
+      ["output shrinkage", step => {
+        turns.lastElementChild.style.height = `${turns.lastElementChild.offsetHeight - (step % 2 ? 5 : 17)}px`;
+      }],
+      ["subpixel growth", () => {
+        turns.lastElementChild.style.height = `${turns.lastElementChild.getBoundingClientRect().height + 0.4}px`;
+      }],
+      ["DOM reflow with unchanged total height", () => {
+        turns.firstElementChild.style.height = `${turns.firstElementChild.offsetHeight + 3}px`;
+        turns.lastElementChild.style.height = `${turns.lastElementChild.offsetHeight - 3}px`;
+        turns.firstElementChild.append(document.createTextNode("."));
+      }],
+      ["viewport resize", step => { viewport.style.height = `${360 + step % 2 * 15}px`; }]
+    ]) {
+      const sample = await checkFrames(change);
+      check(`every pre-paint position during ${name}: ${sample.samples} samples, max error ${sample.maxError.toFixed(2)}px`,
+        sample.samples === 36 && sample.maxError < 1);
+    }
+    on(false);
+    const unprotected = await checkFrames(() => {
+      turns.lastElementChild.style.height = `${turns.lastElementChild.offsetHeight + 5}px`;
+    }, {paused: true});
+    check("paused negative control exposes native reverse-flow movement", unprotected.samples === 36 && unprotected.maxError > 100);
+    on(true);
+    const resumed = await checkFrames(() => {
+      turns.lastElementChild.style.height = `${turns.lastElementChild.offsetHeight + 5}px`;
+    });
+    check(`resume restores pre-paint stability: max error ${resumed.maxError.toFixed(2)}px`, resumed.samples === 36 && resumed.maxError < 1);
     log(`RESULT ${passed}/${total} passed. Real wheel, keyboard, bottom click, and live history loading still required.`);
   } catch (error) { log(`ERROR ${error.message}`); }
   finally { on(true); document.getElementById("run").disabled = false; }

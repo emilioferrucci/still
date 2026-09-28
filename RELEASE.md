@@ -1,8 +1,9 @@
 # Release preparation
 
-Status: experimental source version 0.1.8, maintained on GitHub. This is a
-candidate mitigation for severe rendered jitter reported with 0.1.7. The
-rendered result still needs confirmation; geometry-only tests are insufficient.
+Status: experimental source version 0.1.9, maintained on GitHub. This version
+stops retrying fractional scroll corrections when typing has not moved the
+answer. The local regression passes; whether it resolves the user's intermittent
+rendered wobble still needs confirmation. Geometry-only tests are insufficient.
 No Mozilla Add-ons listing or signing request has been made. Review the test
 report and README disclaimers before any broader distribution.
 

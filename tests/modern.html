@@ -12,6 +12,7 @@ section { height: 220px; padding: 16px; box-sizing: border-box; }
 #turns.late-layout-gap { padding-bottom: 40px; }
 [data-thread-scroll-footer] { position: absolute; right: 35px; bottom: 30px; background: #d9eee3; }
 #bottom { opacity: 0; pointer-events: none; }
+#typing-composer { width: 400px; height: 60px; overflow: auto; background: white; border: 1px solid #888; }
 #nested, #outside { height: 70px; width: 200px; overflow: auto; }
 #nested > div, #outside > div { height: 350px; width: 500px; }
 </style>
@@ -19,6 +20,7 @@ section { height: 220px; padding: 16px; box-sizing: border-box; }
 <button id="run">Run current-layout checks</button>
 <button id="place">Place near older history</button>
 <button id="grow">Grow output after bottom jump</button>
+<button id="typing">Run typing-only check</button>
 <pre id="results" aria-live="polite">Ready.</pre>
 <div class="thread-scroll-container" data-app-action-timeline-scroll tabindex="0">
   <div id="content" data-thread-user-message-navigation-content>
@@ -28,6 +30,7 @@ section { height: 220px; padding: 16px; box-sizing: border-box; }
   <div data-thread-scroll-footer>
     <button id="bottom" aria-label="Scroll to bottom" aria-hidden="true" tabindex="-1">Bottom (native control)</button>
     <button id="send">Send (must remain blocked)</button>
+    <div id="typing-composer" contenteditable="true" role="textbox" aria-label="Local test prompt"></div>
   </div>
 </div>
 <div id="outside"><div>Unrelated scroll panel</div></div>

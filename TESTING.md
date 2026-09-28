@@ -1,4 +1,69 @@
-# Test report — Still 0.1.8 candidate
+# Test report — Still 0.1.9
+
+## Typing-only scroll corrections, 28 September 2026
+
+The user reported small answer-text wobble while typing after the severe jitter
+appeared resolved. This change only separates measured paragraph position from
+the carried fractional scroll remainder. A notification with no new layout
+displacement no longer retries that remainder; the next real layout change
+still consumes it. The 0.1.8 style/class observation, relative corrections,
+native reverse flow, and navigation behavior are retained.
+
+All validation recorded in this section used local files with invented text in
+**ordinary Firefox 156 on macOS**. Developer Edition was not used. Never use
+ChatGPT Pro or paid model credits for extension testing. Do not delete any chats,
+including test chats.
+
+### Reproducible regression and limits
+
+The fixture wraps the native `scrollBy` function with a counter and forwards
+calls unchanged. It seeds nine fractional layout changes, then makes 18 composer
+text edits after each change. It samples paragraph position after each mutation
+and in the next animation frame, and verifies that answer and viewport sizes
+remain unchanged during typing.
+
+With the same fixture at 100% zoom, committed 0.1.8 passed **43/44** checks. Its
+only failure was **334 unnecessary native scroll requests** during typing.
+The revised guard passed **44/44**, with **zero scroll requests** and zero
+measured movement across 324 typing samples. The original guard also had zero
+measured typing movement: these tests reproduce the redundant calls, not the
+user's visible wobble. Removing them is a targeted mitigation; the rendered
+symptom still needs user confirmation.
+
+### Regression coverage
+
+The revised current-layout suite passed **44/44 at both 100% and 110% zoom**.
+Coverage includes genuinely unmounted history, blocked automatic scroll APIs,
+manual movement during output growth, pause/resume, nested panels, viewport
+replacement, fractional growth, internal reflow, viewport resizing, and late
+inline-style/class changes. Protected frame-level error stayed below one CSS
+pixel (maximum 0.40 at 100% zoom and 0.92 at 110%). The paused negative control
+detected native movement. Footer repairs settled with zero idle writes.
+
+Fixture precision was corrected for zoom: manual movement expectations now use
+the actual native scroll delta, nested-panel coordinates allow less than one
+CSS pixel of rounding, and independent frame scenarios reset their reading
+baseline. The old and revised guards were compared using those same checks.
+
+Actual keyboard input in the local composer produced **77 input events**, zero
+measured answer movement, zero scroll corrections, and a connected answer
+paragraph. Native wheel and Page Up scrolling mounted readable earlier sections.
+A trusted bottom-button click reached the final section; further output growth
+preserved position. The legacy suite passed **28/28**. A trusted compact prompt
+navigation click reached its target while unrelated and subsequent automatic
+scrolling remained blocked.
+
+These local checks load the production guard directly. They do not validate a
+fresh extension installation or the current live ChatGPT interface, and they
+are not compositor video measurements. This build has unchanged permissions.
+JavaScript syntax and whitespace checks passed. Mozilla web-ext lint reported
+zero errors, warnings, and notices; its optional update checker could not write
+its config. The unsigned XPI was built locally and was not installed in
+Developer Edition during this task.
+
+---
+
+# Historical test report — Still 0.1.8 candidate
 
 ## Rendered jitter investigation, 28 September 2026
 

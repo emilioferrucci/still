@@ -80,6 +80,9 @@
     let remainder = 0;
     if (previous?.viewport === viewport && previous.element.isConnected &&
         viewport.contains(previous.element)) {
+      // Typing can notify us without moving the passage. Carry rounding error
+      // to the next real layout change instead of retrying it on every update.
+      remainder = previous.remainder;
       // Account for native/manual movement since the last observation. Only
       // compensate displacement caused by layout, not a wheel/keyboard scroll.
       const displacement = previous.element.getBoundingClientRect().top - previous.y +
@@ -89,20 +92,21 @@
       // visible drift. Ignore only noise smaller than a browser layout unit.
       if (Math.abs(displacement) > 0.01) {
         const before = viewport.scrollTop;
+        const correction = displacement + remainder;
         // This is a layout delta, not a new absolute reading destination.
         // Firefox carries relative updates through its compositor separately;
         // absolute scrollTo updates can overwrite an in-flight visual offset
         // and briefly paint the text at the wrong position even when the DOM
         // measurements taken before paint already look correct.
         Reflect.apply(nativeScrollBy, viewport, [{
-          top: displacement, left: 0, behavior: "instant"
+          top: correction, left: 0, behavior: "instant"
         }]);
         // Firefox can round scroll requests to physical pixels. Keep that
         // rounding error in the next anchor instead of losing a fraction on
         // every token. Discard larger errors from clamping at a scroll limit;
         // they must not turn into a delayed jump when more content arrives.
-        const error = displacement - (viewport.scrollTop - before);
-        if (Math.abs(error) < 1) remainder = error;
+        const error = correction - (viewport.scrollTop - before);
+        remainder = Math.abs(error) < 1 ? error : 0;
       }
     }
     const bounds = viewport.getBoundingClientRect();
@@ -133,7 +137,7 @@
     if (!element) element = [...viewport.querySelectorAll(READING_PASSAGE)].find(visiblePassage);
     element ||= viewport.firstElementChild;
     readingAnchor = element ? {viewport, element,
-      top: viewport.scrollTop, y: element.getBoundingClientRect().top - remainder} : null;
+      top: viewport.scrollTop, y: element.getBoundingClientRect().top, remainder} : null;
   }
 
   function root() {

@@ -100,7 +100,7 @@ release Firefox.
 For personal testing, **Firefox Developer Edition** supports persistent unsigned
 installation. Use its separate profile, set `xpinstall.signatures.required` to
 `false` in `about:config`, then open `about:addons` and choose the gear menu →
-**Install Add-on From File…** → `dist/still-0.1.8-unsigned.xpi` (build it below).
+**Install Add-on From File…** → `dist/still-0.1.9-unsigned.xpi` (build it below).
 Confirm the requested
 ChatGPT access. This installation survives restarts; no Mozilla signing submission
 or public listing is involved. The preference permits other unsigned extensions
@@ -146,7 +146,9 @@ absolute destination. This addresses a suspected compositor interaction; passing
 DOM geometry checks alone does not establish that rendered jitter is fixed.
 Still retains a
 visible passage through reflow and carries fractional scroll rounding forward
-to prevent accumulated drift. It never changes the conversation flex direction.
+to the next actual layout change to prevent accumulated drift. Notifications
+that leave the passage in place, such as typing in the composer, do not retry
+that rounding remainder. It never changes the conversation flex direction.
 These checks are event-driven, not a polling loop.
 
 The native bottom button is recognized by its dedicated footer wrapper, with
@@ -217,6 +219,9 @@ automatic scrolling and includes controls for manual gesture stress testing.
 The lab loads the actual `guard.js` source; it has no network dependencies and
 contains only generated test text. `tests/modern.html` covers the current reverse
 layout and changed markup. Do not package `tests/` inside the extension.
+
+Use these local fixtures for automated testing. Never use ChatGPT Pro or paid
+model credits for extension tests. Do not delete any chats, including test chats.
 
 ## Permissions and privacy
 
